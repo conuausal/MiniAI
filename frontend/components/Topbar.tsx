@@ -4,12 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUserKeys } from '@/lib/user-keys';
+import { useChatStore } from '@/lib/store';
 import { useDarkMode } from '@/lib/theme';
 import ApiKeyDrawer from './ApiKeyDrawer';
 
 export default function Topbar() {
   const pathname = usePathname();
   const { hasAny } = useUserKeys();
+  const { enableVoiceOutput, setEnableVoiceOutput, enableVoiceInput, setEnableVoiceInput } = useChatStore();
   const { isDark, toggle } = useDarkMode();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -52,6 +54,23 @@ export default function Topbar() {
         </div>
 
         <div className="flex items-center gap-1">
+          {/* 语音输出开关 */}
+          <button
+            onClick={() => setEnableVoiceOutput(!enableVoiceOutput)}
+            className={`btn !p-2 text-base ${enableVoiceOutput ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200' : 'btn-ghost'}`}
+            title={enableVoiceOutput ? '🔊 自动朗读开启' : '🔇 点击开启自动朗读'}
+          >
+            {enableVoiceOutput ? '🔊' : '🔇'}
+          </button>
+          {/* 语音输入开关 */}
+          <button
+            onClick={() => setEnableVoiceInput(!enableVoiceInput)}
+            className={`btn !p-2 text-base ${enableVoiceInput ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200' : 'btn-ghost'}`}
+            title={enableVoiceInput ? '🎙️ 语音输入开启' : '🎙 点击开启语音输入'}
+          >
+            🎙️
+          </button>
+          {/* 主题 */}
           <button
             onClick={toggle}
             className="btn-ghost btn !p-2"
@@ -59,6 +78,7 @@ export default function Topbar() {
           >
             {isDark ? '☀️' : '🌙'}
           </button>
+          {/* 设置（Key 管理） */}
           <button
             onClick={() => setDrawerOpen(true)}
             className={`btn !p-2 relative ${hasAny ? 'btn-ghost' : 'btn-secondary border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20'}`}

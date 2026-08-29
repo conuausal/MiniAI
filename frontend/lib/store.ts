@@ -8,7 +8,6 @@ interface ChatState {
   sessions: SessionInfo[];
   currentSessionId: string | null;
   messages: ChatMessage[];
-  // 工具调用记录（按消息 index 关联到 assistant 消息）
   toolRecords: Record<number, ToolCallRecord[]>;
   // 模型
   models: ModelInfo[];
@@ -17,6 +16,10 @@ interface ChatState {
   enableRag: boolean;
   enableSearch: boolean;
   enableTools: boolean;
+  // 语音
+  enableVoiceInput: boolean;   // 是否启用语音输入按钮
+  enableVoiceOutput: boolean;  // 是否自动朗读助手回复
+
   // 状态
   streaming: boolean;
   abortCtl: AbortController | null;
@@ -30,6 +33,8 @@ interface ChatState {
   setEnableRag: (v: boolean) => void;
   setEnableSearch: (v: boolean) => void;
   setEnableTools: (v: boolean) => void;
+  setEnableVoiceInput: (v: boolean) => void;
+  setEnableVoiceOutput: (v: boolean) => void;
   setStreaming: (v: boolean) => void;
   setAbortCtl: (c: AbortController | null) => void;
   resetMessages: () => void;
@@ -46,6 +51,9 @@ export const useChatStore = create<ChatState>((set) => ({
   enableRag: false,
   enableSearch: false,
   enableTools: false,
+  enableVoiceInput: true,
+  enableVoiceOutput: false,
+
   streaming: false,
   abortCtl: null,
 
@@ -58,6 +66,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setEnableRag: (enableRag) => set({ enableRag }),
   setEnableSearch: (enableSearch) => set({ enableSearch }),
   setEnableTools: (enableTools) => set({ enableTools }),
+  setEnableVoiceInput: (enableVoiceInput) => set({ enableVoiceInput }),
+  setEnableVoiceOutput: (enableVoiceOutput) => set({ enableVoiceOutput }),
   setStreaming: (streaming) => set({ streaming }),
   setAbortCtl: (abortCtl) => set({ abortCtl }),
   resetMessages: () => set({ messages: [], toolRecords: {}, currentSessionId: null }),

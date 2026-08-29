@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/lib/store';
@@ -6,7 +6,9 @@ import { streamChat, ChatMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
 import ModelSelector from './ModelSelector';
 import ToolCallCard from './ToolCallCard';
+import VoiceInputButton from './VoiceInputButton';
 import { useUserKeys } from '@/lib/user-keys';
+import { speak, stopSpeaking, getVoiceCapability } from '@/lib/voice';
 
 const SUGGESTIONS = [
   { emoji: '💡', title: '解释一个概念', prompt: '用通俗的话解释一下 Transformer 架构' },
@@ -19,6 +21,7 @@ export default function ChatWindow() {
   const {
     messages, toolRecords, currentModel, currentSessionId,
     enableRag, enableSearch, enableTools,
+    enableVoiceInput, enableVoiceOutput,
     streaming, setStreaming, setAbortCtl, abortCtl,
     appendMessage, setMessages, setCurrentSession,
     appendToolRecord,
@@ -27,6 +30,8 @@ export default function ChatWindow() {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const ttsSupported = getVoiceCapability().tts;
+  const lastSpokenIdxRef = useRef<number>(-1);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -40,15 +45,40 @@ export default function ChatWindow() {
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
   }, [input]);
 
+  // 当某条 assistant 消息结束时，自动朗读（如果开启）
+  useEffect(() => {
+    if (!enableVoiceOutput || !ttsSupported) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content) return;
+    if (streaming) return;
+    if (lastSpokenIdxRef.current === messages.length - 1) return;
+    lastSpokenIdxRef.current = messages.length - 1;
+    // 把 markdown 简单清理掉再朗读（去掉 `**` `#` 等符号）
+    const cleaned = last.content
+      .replace(/```[\s\S]*?```/g, '代码块已省略')
+      .replace(/[*_`#>]/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\n+/g, '。 ')
+      .trim();
+    speak(cleaned.slice(0, 1500), { lang: 'zh-CN', rate: 1.05 });
+  }, [messages, streaming, enableVoiceOutput, ttsSupported]);
+
+  const stop = () => {
+    abortCtl?.abort();
+    stopSpeaking();
+  };
+
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
     if (!text || streaming) return;
     setInput('');
+    stopSpeaking(); // 用户开始新对话时停掉上一段朗读
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     appendMessage(userMsg);
     appendMessage({ role: 'assistant', content: '' });
     const assistantIdx = useChatStore.getState().messages.length - 1;
+    lastSpokenIdxRef.current = -1;
 
     const ctl = new AbortController();
     setAbortCtl(ctl);
@@ -177,12 +207,17 @@ export default function ChatWindow() {
               rows={1}
               disabled={!hasAny}
             />
+            <div className="absolute bottom-2 left-2 flex items-center gap-1">
+              {enableVoiceInput && (
+                <VoiceInputButton
+                  onFinalText={(t) => send(t)}
+                  disabled={!hasAny || streaming}
+                />
+              )}
+            </div>
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
               {streaming ? (
-                <button
-                  onClick={() => abortCtl?.abort()}
-                  className="btn bg-red-100 text-red-700 hover:bg-red-200 !py-1.5 !px-3 text-xs"
-                >
+                <button onClick={stop} className="btn bg-red-100 text-red-700 hover:bg-red-200 !py-1.5 !px-3 text-xs">
                   停止
                 </button>
               ) : (
@@ -214,13 +249,13 @@ function WelcomeScreen({ hasKey, onPick }: { hasKey: boolean; onPick: (t: string
       <div className="max-w-2xl text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200 text-xs font-medium">
           <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse-soft" />
-          开源 · 隐私友好 · 可自部署
+          开源 · 隐私友好 · 可自部署 · 支持语音
         </div>
         <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight mb-3">
           你好，我是 <span className="text-brand-600 dark:text-brand-400">MiniAI</span>
         </h1>
         <p className="text-text-soft text-base md:text-lg max-w-lg mx-auto mb-10">
-          多模型 · RAG 知识库 · 联网搜索 · 工具调用 · 多智能体写作 —— 一个真正属于你的 AI 助手。
+          多模型 · RAG 知识库 · 联网搜索 · 工具调用 · 多智能体写作 · <span className="text-brand-600 dark:text-brand-400">语音对话</span>
         </p>
 
         {!hasKey && (
