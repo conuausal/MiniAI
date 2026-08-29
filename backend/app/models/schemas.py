@@ -26,6 +26,8 @@ class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     name: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -36,6 +38,7 @@ class ChatRequest(BaseModel):
     max_tokens: int = Field(default=2048, ge=1, le=32000)
     enable_rag: bool = False
     enable_search: bool = False
+    enable_tools: bool = False
     stream: bool = True
 
 
@@ -77,3 +80,15 @@ class KnowledgeQueryResponse(BaseModel):
     question: str
     contexts: List[Dict[str, Any]]
     answer: Optional[str] = None
+
+
+# ============== Tools ==============
+
+class ToolInfo(BaseModel):
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+
+class ToolListResponse(BaseModel):
+    tools: List[ToolInfo]

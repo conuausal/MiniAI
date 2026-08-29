@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { api, ModelInfo } from '@/lib/api';
+import { api, ModelInfo, ToolInfo } from '@/lib/api';
 
 export default function SettingsPage() {
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [tools, setTools] = useState<ToolInfo[]>([]);
   const [health, setHealth] = useState<string>('检测中…');
 
   useEffect(() => {
     api.health().then((h) => setHealth(h.status)).catch(() => setHealth('❌ 后端不可达'));
     api.listModels().then(({ models }) => setModels(models)).catch(() => {});
+    api.listTools().then(({ tools }) => setTools(tools)).catch(() => {});
   }, []);
 
   const reload = async () => {
@@ -27,7 +29,7 @@ export default function SettingsPage() {
       <Sidebar />
       <section className="flex-1 overflow-y-auto p-8 bg-slate-50 dark:bg-slate-950">
         <h1 className="text-2xl font-bold mb-1">⚙️ 设置</h1>
-        <p className="text-sm text-slate-500 mb-6">配置 API Key、查看模型可用性</p>
+        <p className="text-sm text-slate-500 mb-6">配置 API Key、查看模型与工具可用性</p>
 
         <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 mb-6">
           <div className="flex items-center justify-between mb-2">
@@ -42,7 +44,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div className="font-semibold">模型</div>
             <button onClick={reload} className="text-xs px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white">重新加载</button>
@@ -68,7 +70,27 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="mt-6 bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 text-sm space-y-2">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 mb-6">
+          <div className="font-semibold mb-3">🔧 Function Calling 工具（{tools.length}）</div>
+          <p className="text-xs text-slate-500 mb-3">
+            在对话中勾选 🔧 工具 后，MiniAI 会自动调用合适的工具完成任务。可视化调用过程。
+          </p>
+          <div className="space-y-2 text-sm">
+            {tools.map((t) => (
+              <div key={t.name} className="pl-3 py-2 border-l-2 border-amber-400 bg-amber-50/40 dark:bg-amber-900/10 rounded-r">
+                <div className="flex items-center justify-between">
+                  <code className="font-mono font-semibold text-amber-700 dark:text-amber-300">{t.name}</code>
+                  <span className="text-xs text-slate-500">
+                    {Object.keys(t.parameters?.properties || {}).length} 参数
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 text-sm space-y-2">
           <div className="font-semibold">🚀 快速开始</div>
           <ol className="list-decimal list-inside text-slate-600 dark:text-slate-300 space-y-1">
             <li>复制 <code>backend/.env.example</code> 为 <code>backend/.env</code></li>

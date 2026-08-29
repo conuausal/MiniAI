@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 🧠 MiniAI
 
@@ -198,12 +198,14 @@ MODEL_REGISTRY["my-model"] = {
 
 ## 🗺️ Roadmap
 
-- [x] MVP：多模型 + RAG + 联网 + 记忆（当前）
+- [x] MVP：多模型 + RAG + 联网 + 记忆（0.1.0）
+- [x] Function Calling + 工具可视化（0.2.0）
 - [ ] 多智能体协作（Planner-Worker 模式）
-- [ ] 工具调用（Function Calling）：日历、邮件、文件
+- [x] 工具调用（Function Calling）：5 个内置工具（时间/计算/搜索/检索/读文件）+ 可视化卡片
 - [ ] 语音交互（Whisper ASR + Edge TTS）
 - [ ] Web 搜索结果可视化（引用卡片）
-- [ ] ReAct 推理链可视化
+- [ ] 自定义工具（用户上传 JSON Schema）
+- [x] 工具调用可视化（折叠卡片）
 - [ ] 用户系统 + 多租户
 - [ ] 移动端 PWA
 - [ ] 浏览器扩展
@@ -245,6 +247,23 @@ MiniAI 起始于一份个人痛点清单（见 [`我的日常痛点.md.md`](./�
 3. 在 `backend/.env` 接入更多模型（GPT-4o 适合创意，o1 适合复杂推理）
 4. 一键 Docker 部署后即可在任何设备访问
 
+
+
+### 🔧 Function Calling 怎么用？
+
+勾选对话页右上角的 **🔧 工具** 开关，然后试试这些问题：
+
+| 你的输入 | MiniAI 自动做的 |
+|:--|:--|
+| 「现在几点了？」 | 调用 get_current_time 返回准确时间 |
+| 「(123+456)*7 等于多少」 | 调用 calculate 安全求值 |
+| 「帮我搜下今天 AI 新闻」 | 调用 web_search 实时检索 |
+| 「之前上传的那份文档说了什么」 | 调用 query_knowledge RAG 召回 |
+| 「打开 README.md 看看」 | 调用 ead_file 读取项目内文件 |
+
+调用过程会显示在助手消息下方的一个**琥珀色折叠卡片**里，展开能看到每个工具的名称、参数、结果 —— 这正是你痛点 P3「操作可视化」的落地。
+
+如果你想加自己的工具（比如"查日历"、"发邮件"），只需在 ackend/app/core/tools.py 里再 _register(...) 一行即可。
 ### 我能不能纯本地跑、不花钱？
 
 可以。三个步骤：

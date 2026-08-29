@@ -2,6 +2,31 @@
 
 所有显著变更都会记录在此文件。版本遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.0] - 2026-08-29
+
+### ✨ Added
+
+- 🛠️ **Function Calling（工具调用）** —— OpenAI 兼容 `tools` 标准，支持多轮工具调用循环
+  - 内置 5 个实用工具：
+    - `get_current_time` ⏰ 获取当前时间（早上汇报、下班日报刚需）
+    - `calculate` 🧮 安全数学计算（沙箱表达式求值）
+    - `web_search` 🌐 包装现有联网搜索
+    - `query_knowledge` 📚 包装现有 RAG 检索
+    - `read_file` 📄 读取项目目录 / 上传目录内的文本文件（路径白名单防穿越）
+  - 自动循环：检测到 `tool_calls` → 执行 → 结果以 `role=tool` 回填 → LLM 再次生成，最多 3 轮
+  - 前端工具调用可视化卡片（黄色折叠面板，显示每个工具的名称 / 参数 / 结果）
+  - 新增 `GET /api/tools` 列出所有可用工具
+  - 新增 SSE 事件类型：`tool_call`、`tool_result`
+
+### 🔧 Changed
+
+- `app/core/llm.py`：流式 / 非流式接口增加 `tools` 参数，支持增量 `tool_calls` 累积
+- `app/main.py`：版本号 0.1.0 → 0.2.0，新增 tools 路由
+- 前端 ModelSelector 增加 🔧 工具开关（amber 配色）
+- 设置页增加"Function Calling 工具"清单展示
+
+---
+
 ## [0.1.0] - 2026-08-29
 
 ### ✨ Added
@@ -27,9 +52,3 @@
   - 中英双语 README
   - CONTRIBUTING / CHANGELOG
   - GitHub Actions CI（Python lint + 前端 lint/build）
-
-### 📝 Notes
-
-- 默认推荐使用 DeepSeek 作为入门模型（性价比 + 中文能力强）
-- Embedding 模型 `BAAI/bge-small-zh-v1.5` 首次启动自动下载（约 90 MB）
-- 下个版本（0.2.0）计划：Function Calling / 多智能体 / 语音交互

@@ -4,7 +4,13 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
-export interface ChatMessage { role: Role; content: string; }
+export interface ChatMessage {
+  role: Role;
+  content: string;
+  name?: string | null;
+  tool_calls?: any[] | null;
+  tool_call_id?: string | null;
+}
 
 export interface ModelInfo { id: string; label: string; provider: string; enabled: boolean; }
 
@@ -16,6 +22,18 @@ export interface SessionInfo {
 export interface KnowledgeDoc {
   id: string; name: string; source: string;
   chunks: number; collection: string; created_at: string;
+}
+
+export interface ToolInfo {
+  name: string;
+  description: string;
+  parameters: Record<string, any>;
+}
+
+export interface ToolCallRecord {
+  name: string;
+  args: Record<string, any>;
+  result: string;
 }
 
 // ============== 普通 REST ==============
@@ -58,6 +76,8 @@ export const api = {
       '/api/knowledge/query',
       { method: 'POST', body: JSON.stringify({ question, collection, top_k }) },
     ),
+
+  listTools: () => jsonFetch<{ tools: ToolInfo[] }>('/api/tools'),
 };
 
 // ============== 流式聊天（SSE） ==============
@@ -65,6 +85,8 @@ export const api = {
 export interface ChatStreamHandlers {
   onMeta?: (data: { session_id: string; model: string }) => void;
   onDelta?: (delta: string) => void;
+  onToolCall?: (data: { round: number; tool_calls: any[] }) => void;
+  onToolResult?: (data: { name: string; args: Record<string, any>; result: string }) => void;
   onDone?: (session_id: string) => void;
   onError?: (message: string) => void;
 }
@@ -78,6 +100,7 @@ export async function streamChat(
     max_tokens?: number;
     enable_rag?: boolean;
     enable_search?: boolean;
+    enable_tools?: boolean;
   },
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
@@ -115,6 +138,8 @@ export async function streamChat(
         const data = JSON.parse(dataLines.join('\n'));
         if (event === 'meta') handlers.onMeta?.(data);
         else if (event === 'delta') handlers.onDelta?.(data.content ?? '');
+        else if (event === 'tool_call') handlers.onToolCall?.(data);
+        else if (event === 'tool_result') handlers.onToolResult?.(data);
         else if (event === 'done') handlers.onDone?.(data.session_id);
         else if (event === 'error') handlers.onError?.(data.message ?? 'unknown');
       } catch {

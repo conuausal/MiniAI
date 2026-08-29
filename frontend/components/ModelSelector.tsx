@@ -3,7 +3,13 @@
 import { useChatStore } from '@/lib/store';
 
 export default function ModelSelector() {
-  const { models, currentModel, setCurrentModel, enableRag, setEnableRag, enableSearch, setEnableSearch, streaming, setAbortCtl, abortCtl } = useChatStore();
+  const {
+    models, currentModel, setCurrentModel,
+    enableRag, setEnableRag,
+    enableSearch, setEnableSearch,
+    enableTools, setEnableTools,
+    streaming, abortCtl, setAbortCtl,
+  } = useChatStore();
 
   const enabled = models.filter((m) => m.enabled);
   const disabled = models.filter((m) => !m.enabled);
@@ -28,14 +34,19 @@ export default function ModelSelector() {
         )}
       </select>
 
-      <label className="text-xs flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer">
+      <label className="text-xs flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer" title="基于本地知识库检索">
         <input type="checkbox" checked={enableRag} onChange={(e) => setEnableRag(e.target.checked)} />
         📚 RAG
       </label>
 
-      <label className="text-xs flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer">
+      <label className="text-xs flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer" title="联网搜索">
         <input type="checkbox" checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} />
         🌐 联网
+      </label>
+
+      <label className="text-xs flex items-center gap-1 px-2 py-1 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 cursor-pointer" title="启用 Function Calling（让助手能查时间、算数学、读文件等）">
+        <input type="checkbox" checked={enableTools} onChange={(e) => setEnableTools(e.target.checked)} />
+        🔧 工具
       </label>
 
       {streaming && (

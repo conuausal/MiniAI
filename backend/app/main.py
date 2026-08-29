@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api import chat, knowledge, models, sessions
+from app.api import chat, knowledge, models, sessions, tools
 from app.config import settings
 from app.core.rag import rag_engine
 from app.db.database import init_db
@@ -25,8 +25,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="MiniAI API",
-    description="开源的个人 AI 助手：多模型 + RAG + 联网搜索 + 对话记忆",
-    version="0.1.0",
+    description="开源的个人 AI 助手：多模型 + RAG + 联网搜索 + 工具调用 + 对话记忆",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -42,8 +42,9 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
+app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
 
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
-    return {"status": "ok", "app": settings.app_name, "version": "0.1.0"}
+    return {"status": "ok", "app": settings.app_name, "version": "0.2.0"}

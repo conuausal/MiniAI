@@ -25,25 +25,27 @@ export default function MessageBubble({ message }: Props) {
             {message.role === 'assistant' ? 'MiniAI' : message.role}
           </div>
         )}
-        <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ inline, className, children, ...props }: any) {
-                const match = /language-(\w+)/.exec(className || '');
-                return !inline && match ? (
-                  <SyntaxHighlighter style={oneDark as any} language={match[1]} PreTag="div">
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
-                ) : (
-                  <code className={className} {...props}>{children}</code>
-                );
-              },
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
-        </div>
+        {message.content && (
+          <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({ inline, className, children, ...props }: any) {
+                  const match = /language-(\w+)/.exec(className || '');
+                  return !inline && match ? (
+                    <SyntaxHighlighter style={oneDark as any} language={match[1]} PreTag="div">
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code className={className} {...props}>{children}</code>
+                  );
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );

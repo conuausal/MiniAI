@@ -1,9 +1,8 @@
-"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 对话记忆。"""
+"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
 from __future__ import annotations
 
 import json
-import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat_once, stream_chat
 from app.core.memory import MemoryStore
 from app.core.rag import rag_engine
+from app.core.tools import execute_tool, list_tools
 from app.core.web_search import format_for_prompt, web_search
 from app.db.database import get_session
 from app.models.schemas import ChatRequest
@@ -22,21 +22,29 @@ SYSTEM_PROMPT = """你是 MiniAI，一个开源、轻量、可私有化部署的
 
 回答风格要求：
 1. 简洁直接，避免冗余套话。
-2. 涉及数据/事实时，主动标注来源（文档名 / 搜索链接）。
+2. 涉及数据/事实时，主动标注来源（文档名 / 搜索链接 / 工具名称）。
 3. 当上下文足够时直接给结论，不确定时说明不确定。
 4. 默认使用中文；如果用户使用其他语言，跟随用户语言。
+
+关于工具调用：
+- 当问题涉及实时信息（时间、新闻、最新数据）或数学计算时，主动调用相应工具。
+- 当用户提到"我上传的"、"之前的资料"、"那份文档"时，调用 query_knowledge。
+- 工具调用结果会作为上下文回填给你，请基于真实结果回答，不要编造。
+- 一次回答中最多连续调用 3 轮工具，避免无限循环。
 """
 
 
+# 工具调用最大循环次数（防止死循环 & 控制成本）
+MAX_TOOL_ROUNDS = 3
+
+
 async def _ensure_session(db: AsyncSession, req: ChatRequest) -> tuple[MemoryStore, str]:
-    """确保有可用会话，没有就建一个。"""
     store = MemoryStore(db)
     if req.session_id:
         sess = await store.get_session(req.session_id)
         if not sess:
             raise HTTPException(status_code=404, detail=f"session {req.session_id} 不存在")
         return store, sess.id
-    # 新会话
     first_user_msg = next((m.content for m in req.messages if m.role == "user"), "新对话")
     sess = await store.create_session(
         title=first_user_msg[:30] or "新对话",
@@ -45,7 +53,7 @@ async def _ensure_session(db: AsyncSession, req: ChatRequest) -> tuple[MemorySto
     return store, sess.id
 
 
-async def _build_messages(
+async def _build_initial_messages(
     store: MemoryStore,
     session_id: str,
     req: ChatRequest,
@@ -71,7 +79,6 @@ async def _build_messages(
 
     if extra_context_blocks:
         augmented = last_user.content + "\n\n---\n" + "\n\n".join(extra_context_blocks)
-        # 替换 history 里最后一条 user，附加上下文
         for i in range(len(history) - 1, -1, -1):
             if history[i]["role"] == "user":
                 history[i]["content"] = augmented
@@ -82,29 +89,35 @@ async def _build_messages(
     return history
 
 
+# ---------- 非流式（含工具循环） ----------
+
 @router.post("/completions")
 async def chat_completions(
     req: ChatRequest,
     db: AsyncSession = Depends(get_session),
 ) -> StreamingResponse | dict:
-    """主入口：支持流式 SSE 输出。"""
+    """主入口：流式 SSE 输出（含 function calling 自动循环）。"""
     store, session_id = await _ensure_session(db, req)
 
     # 持久化用户消息
     user_msgs = [m for m in req.messages if m.role == "user"]
     if user_msgs:
-        last_user = user_msgs[-1]
-        await store.append_message(session_id, "user", last_user.content)
+        await store.append_message(session_id, "user", user_msgs[-1].content)
 
-    full_messages = await _build_messages(store, session_id, req)
+    full_messages = await _build_initial_messages(store, session_id, req)
+    tools_schema = list_tools() if req.enable_tools else None
 
     if not req.stream:
-        # 非流式
-        text = await chat_once(
+        # 非流式：执行最多 N 轮工具调用
+        text, _ = await _run_with_tools(
+            store=store,
+            session_id=session_id,
             model=req.model,
             messages=full_messages,
+            tools=tools_schema,
             temperature=req.temperature,
             max_tokens=req.max_tokens,
+            max_rounds=MAX_TOOL_ROUNDS,
         )
         await store.append_message(session_id, "assistant", text)
         return {"session_id": session_id, "content": text}
@@ -114,14 +127,69 @@ async def chat_completions(
         assistant_buf: list[str] = []
         try:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'model': req.model}, ensure_ascii=False)}\n\n"
-            async for delta in stream_chat(
-                model=req.model,
-                messages=full_messages,
-                temperature=req.temperature,
-                max_tokens=req.max_tokens,
-            ):
-                assistant_buf.append(delta)
-                yield f"event: delta\ndata: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
+
+            # 工具调用循环：每轮最多 3 次
+            current_messages = list(full_messages)
+            for _round in range(MAX_TOOL_ROUNDS):
+                round_buf: list[str] = []
+                tool_calls_raw: List[dict] = []
+
+                # 流式调用 LLM，解析嵌入的 TOOL_CALLS 标记
+                buf = ""
+                async for delta in stream_chat(
+                    model=req.model,
+                    messages=current_messages,
+                    temperature=req.temperature,
+                    max_tokens=req.max_tokens,
+                    tools=tools_schema,
+                ):
+                    if "<<<TOOL_CALLS>>>" in delta:
+                        # 切分文本与工具调用标记
+                        before, _, after = delta.partition("<<<TOOL_CALLS>>>")
+                        json_part, _, end_marker = after.partition("<<<END>>>")
+                        if before:
+                            round_buf.append(before)
+                            assistant_buf.append(before)
+                            yield f"event: delta\ndata: {json.dumps({'content': before}, ensure_ascii=False)}\n\n"
+                        try:
+                            tool_calls_raw = json.loads(json_part)
+                        except Exception:
+                            tool_calls_raw = []
+                    else:
+                        round_buf.append(delta)
+                        assistant_buf.append(delta)
+                        yield f"event: delta\ndata: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
+
+                # 工具为空 → 结束本轮
+                if not tool_calls_raw:
+                    break
+
+                # 推送工具调用事件给前端
+                yield f"event: tool_call\ndata: {json.dumps({'round': _round + 1, 'tool_calls': tool_calls_raw}, ensure_ascii=False)}\n\n"
+
+                # 执行工具，回填结果
+                tool_msgs = []
+                for tc in tool_calls_raw:
+                    name = tc.get("function", {}).get("name", "")
+                    args_raw = tc.get("function", {}).get("arguments", "{}")
+                    try:
+                        args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+                    except Exception:
+                        args = {}
+                    result = await execute_tool(name, args)
+                    yield f"event: tool_result\ndata: {json.dumps({'name': name, 'args': args, 'result': result[:4000]}, ensure_ascii=False)}\n\n"
+                    tool_msgs.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "name": name,
+                        "content": result,
+                    })
+
+                # 拼回对话历史，让 LLM 继续生成
+                round_text = "".join(round_buf)
+                current_messages.append({"role": "assistant", "content": round_text, "tool_calls": tool_calls_raw})
+                current_messages.extend(tool_msgs)
+
             final = "".join(assistant_buf)
             await store.append_message(session_id, "assistant", final)
             yield f"event: done\ndata: {json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
@@ -129,6 +197,55 @@ async def chat_completions(
             yield f"event: error\ndata: {json.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+async def _run_with_tools(
+    *,
+    store: MemoryStore,
+    session_id: str,
+    model: str,
+    messages: list[dict],
+    tools: list[dict] | None,
+    temperature: float,
+    max_tokens: int,
+    max_rounds: int,
+) -> tuple[str, list[dict]]:
+    """非流式工具调用循环，返回 (final_text, all_tool_records)。"""
+    current = list(messages)
+    all_records: list[dict] = []
+    for _round in range(max_rounds):
+        result = await chat_once(
+            model=model, messages=current, temperature=temperature,
+            max_tokens=max_tokens, tools=tools,
+        )
+        if not result["tool_calls"]:
+            return result["text"], all_records
+        # 执行工具
+        tool_msgs = []
+        for tc in result["tool_calls"]:
+            name = (tc.get("function") or {}).get("name", "")
+            args_raw = (tc.get("function") or {}).get("arguments", "{}")
+            try:
+                args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+            except Exception:
+                args = {}
+            tool_result = await execute_tool(name, args)
+            all_records.append({"name": name, "args": args, "result": tool_result})
+            tool_msgs.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "name": name,
+                "content": tool_result,
+            })
+        current.append({
+            "role": "assistant",
+            "content": result["text"],
+            "tool_calls": result["tool_calls"],
+        })
+        current.extend(tool_msgs)
+    # 兜底：最后一轮纯生成
+    final = await chat_once(model=model, messages=current, temperature=temperature, max_tokens=max_tokens)
+    return final["text"], all_records
 
 
 @router.get("/sessions/{session_id}/messages")

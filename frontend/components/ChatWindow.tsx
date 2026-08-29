@@ -5,17 +5,22 @@ import { useChatStore } from '@/lib/store';
 import { streamChat, ChatMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
 import ModelSelector from './ModelSelector';
+import ToolCallCard from './ToolCallCard';
 
 export default function ChatWindow() {
-  const { messages, currentModel, currentSessionId, enableRag, enableSearch,
+  const {
+    messages, toolRecords, currentModel, currentSessionId,
+    enableRag, enableSearch, enableTools,
     streaming, setStreaming, setAbortCtl, abortCtl,
-    appendMessage, setMessages, setCurrentSession } = useChatStore();
+    appendMessage, setMessages, setCurrentSession,
+    appendToolRecord,
+  } = useChatStore();
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, toolRecords]);
 
   const send = async () => {
     const text = input.trim();
@@ -26,6 +31,7 @@ export default function ChatWindow() {
     appendMessage(userMsg);
     const assistantMsg: ChatMessage = { role: 'assistant', content: '' };
     appendMessage(assistantMsg);
+    const assistantIdx = useChatStore.getState().messages.length - 1; // 刚 append 的 assistant index
 
     const ctl = new AbortController();
     setAbortCtl(ctl);
@@ -38,6 +44,7 @@ export default function ChatWindow() {
         messages: [...messages, userMsg],
         enable_rag: enableRag,
         enable_search: enableSearch,
+        enable_tools: enableTools,
         temperature: 0.7,
         max_tokens: 2048,
       },
@@ -46,10 +53,31 @@ export default function ChatWindow() {
         onDelta: (delta) => {
           const all = useChatStore.getState().messages;
           const next = [...all];
-          // 替换最后一条 assistant
           const lastIdx = next.length - 1;
           next[lastIdx] = { ...next[lastIdx], content: (next[lastIdx].content || '') + delta };
           setMessages(next);
+        },
+        onToolCall: ({ tool_calls }) => {
+          // 用占位记录，先展示"准备调用"
+          for (const tc of tool_calls) {
+            let args: any = {};
+            try { args = JSON.parse(tc?.function?.arguments || '{}'); } catch {}
+            appendToolRecord(assistantIdx, { name: tc?.function?.name || 'unknown', args, result: '⏳ 调用中…' });
+          }
+        },
+        onToolResult: ({ name, args, result }) => {
+          // 找到该 assistant 消息下最后一个未完成记录并更新
+          const records = useChatStore.getState().toolRecords[assistantIdx] || [];
+          const idx = records.findIndex((r) => r.name === name && r.result === '⏳ 调用中…');
+          if (idx >= 0) {
+            const next = [...records];
+            next[idx] = { name, args, result };
+            useChatStore.setState((s) => ({
+              toolRecords: { ...s.toolRecords, [assistantIdx]: next },
+            }));
+          } else {
+            appendToolRecord(assistantIdx, { name, args, result });
+          }
         },
         onError: (msg) => {
           const all = useChatStore.getState().messages;
@@ -85,12 +113,25 @@ export default function ChatWindow() {
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-500">
             <div className="text-5xl mb-3">🧠</div>
             <div className="text-lg font-semibold mb-1">你好，我是 MiniAI</div>
-            <div className="text-sm">选择一个模型、勾选 RAG / 联网，开始你的第一次提问</div>
+            <div className="text-sm">选择模型、勾选 RAG / 联网 / 工具，开始你的第一次提问</div>
+            <div className="mt-4 text-xs text-slate-400">
+              💡 试试：勾选 🔧 工具 后问「现在几点了？」「算一下 (123+456)*7」「帮我搜下最新 AI 新闻」
+            </div>
           </div>
         )}
-        {messages.map((m, i) => <MessageBubble key={i} message={m} />)}
+        {messages.map((m, i) => (
+          <div key={i}>
+            <MessageBubble message={m} />
+            {/* 在对应 assistant 消息下方展示工具卡片 */}
+            {m.role === 'assistant' && toolRecords[i] && toolRecords[i].length > 0 && (
+              <div className="flex justify-start mt-2">
+                <ToolCallCard records={toolRecords[i]} />
+              </div>
+            )}
+          </div>
+        ))}
         {streaming && messages[messages.length - 1]?.content === '' && (
-          <div className="text-xs text-slate-400 animate-blink">MiniAI 正在思考…</div>
+          <div className="text-xs text-slate-400 animate-blink ml-2">MiniAI 正在思考…</div>
         )}
       </div>
 
