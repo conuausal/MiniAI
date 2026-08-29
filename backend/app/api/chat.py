@@ -1,14 +1,14 @@
-﻿"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
+"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator, List
+from typing import AsyncIterator, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_once, stream_chat
+from app.core.llm import chat_once, parse_user_keys, stream_chat
 from app.core.memory import MemoryStore
 from app.core.rag import rag_engine
 from app.core.tools import execute_tool, list_tools
@@ -33,9 +33,12 @@ SYSTEM_PROMPT = """你是 MiniAI，一个开源、轻量、可私有化部署的
 - 一次回答中最多连续调用 3 轮工具，避免无限循环。
 """
 
-
-# 工具调用最大循环次数（防止死循环 & 控制成本）
 MAX_TOOL_ROUNDS = 3
+
+
+def get_user_keys(x_user_api_keys: Optional[str] = Header(default=None)) -> dict:
+    """FastAPI Depends：从请求头读取用户 API Keys。"""
+    return parse_user_keys(x_user_api_keys)
 
 
 async def _ensure_session(db: AsyncSession, req: ChatRequest) -> tuple[MemoryStore, str]:
@@ -89,17 +92,15 @@ async def _build_initial_messages(
     return history
 
 
-# ---------- 非流式（含工具循环） ----------
-
 @router.post("/completions", response_model=None)
 async def chat_completions(
     req: ChatRequest,
     db: AsyncSession = Depends(get_session),
+    user_keys: dict = Depends(get_user_keys),
 ) -> StreamingResponse | dict:
     """主入口：流式 SSE 输出（含 function calling 自动循环）。"""
     store, session_id = await _ensure_session(db, req)
 
-    # 持久化用户消息
     user_msgs = [m for m in req.messages if m.role == "user"]
     if user_msgs:
         await store.append_message(session_id, "user", user_msgs[-1].content)
@@ -108,7 +109,6 @@ async def chat_completions(
     tools_schema = list_tools() if req.enable_tools else None
 
     if not req.stream:
-        # 非流式：执行最多 N 轮工具调用
         text, _ = await _run_with_tools(
             store=store,
             session_id=session_id,
@@ -118,23 +118,21 @@ async def chat_completions(
             temperature=req.temperature,
             max_tokens=req.max_tokens,
             max_rounds=MAX_TOOL_ROUNDS,
+            user_keys=user_keys,
         )
         await store.append_message(session_id, "assistant", text)
         return {"session_id": session_id, "content": text}
 
-    # 流式
     async def event_gen() -> AsyncIterator[str]:
         assistant_buf: list[str] = []
         try:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'model': req.model}, ensure_ascii=False)}\n\n"
 
-            # 工具调用循环：每轮最多 3 次
             current_messages = list(full_messages)
             for _round in range(MAX_TOOL_ROUNDS):
                 round_buf: list[str] = []
                 tool_calls_raw: List[dict] = []
 
-                # 流式调用 LLM，解析嵌入的 TOOL_CALLS 标记
                 buf = ""
                 async for delta in stream_chat(
                     model=req.model,
@@ -142,11 +140,11 @@ async def chat_completions(
                     temperature=req.temperature,
                     max_tokens=req.max_tokens,
                     tools=tools_schema,
+                    user_keys=user_keys,
                 ):
                     if "<<<TOOL_CALLS>>>" in delta:
-                        # 切分文本与工具调用标记
                         before, _, after = delta.partition("<<<TOOL_CALLS>>>")
-                        json_part, _, end_marker = after.partition("<<<END>>>")
+                        json_part, _, _ = after.partition("<<<END>>>")
                         if before:
                             round_buf.append(before)
                             assistant_buf.append(before)
@@ -160,14 +158,11 @@ async def chat_completions(
                         assistant_buf.append(delta)
                         yield f"event: delta\ndata: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
 
-                # 工具为空 → 结束本轮
                 if not tool_calls_raw:
                     break
 
-                # 推送工具调用事件给前端
                 yield f"event: tool_call\ndata: {json.dumps({'round': _round + 1, 'tool_calls': tool_calls_raw}, ensure_ascii=False)}\n\n"
 
-                # 执行工具，回填结果
                 tool_msgs = []
                 for tc in tool_calls_raw:
                     name = tc.get("function", {}).get("name", "")
@@ -185,7 +180,6 @@ async def chat_completions(
                         "content": result,
                     })
 
-                # 拼回对话历史，让 LLM 继续生成
                 round_text = "".join(round_buf)
                 current_messages.append({"role": "assistant", "content": round_text, "tool_calls": tool_calls_raw})
                 current_messages.extend(tool_msgs)
@@ -209,18 +203,17 @@ async def _run_with_tools(
     temperature: float,
     max_tokens: int,
     max_rounds: int,
+    user_keys: dict,
 ) -> tuple[str, list[dict]]:
-    """非流式工具调用循环，返回 (final_text, all_tool_records)。"""
     current = list(messages)
     all_records: list[dict] = []
     for _round in range(max_rounds):
         result = await chat_once(
             model=model, messages=current, temperature=temperature,
-            max_tokens=max_tokens, tools=tools,
+            max_tokens=max_tokens, tools=tools, user_keys=user_keys,
         )
         if not result["tool_calls"]:
             return result["text"], all_records
-        # 执行工具
         tool_msgs = []
         for tc in result["tool_calls"]:
             name = (tc.get("function") or {}).get("name", "")
@@ -243,8 +236,7 @@ async def _run_with_tools(
             "tool_calls": result["tool_calls"],
         })
         current.extend(tool_msgs)
-    # 兜底：最后一轮纯生成
-    final = await chat_once(model=model, messages=current, temperature=temperature, max_tokens=max_tokens)
+    final = await chat_once(model=model, messages=current, temperature=temperature, max_tokens=max_tokens, user_keys=user_keys)
     return final["text"], all_records
 
 

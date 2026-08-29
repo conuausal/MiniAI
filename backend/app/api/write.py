@@ -4,18 +4,18 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from typing import AsyncIterator, Dict, List
+from typing import AsyncIterator, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.core.llm import parse_user_keys
 from app.core.writing_agents import OutlineItem, run_writing_pipeline
 from app.models.schemas import WriteRequest
 
 router = APIRouter()
 
 
-# 用于汇总进度的内存存储（生产环境建议改 Redis）
 _PROGRESS_STORE: Dict[str, List[dict]] = {}
 
 
@@ -23,9 +23,15 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def get_user_keys(x_user_api_keys: Optional[str] = Header(default=None)) -> dict:
+    return parse_user_keys(x_user_api_keys)
+
+
 @router.post("/article")
-async def write_article(req: WriteRequest) -> StreamingResponse:
-    """SSE 流式推送写作流水线的每个阶段。"""
+async def write_article(
+    req: WriteRequest,
+    user_keys: dict = Depends(get_user_keys),
+) -> StreamingResponse:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
 
@@ -36,15 +42,12 @@ async def write_article(req: WriteRequest) -> StreamingResponse:
         queue: asyncio.Queue = asyncio.Queue()
 
         def emit(payload: dict) -> None:
-            """把阶段事件推进队列，前端通过 SSE 收到。"""
             payload_with_id = {**payload, "task_id": task_id}
             queue.put_nowait(payload_with_id)
-            # 同时存到进度表，方便 /history 回顾
             _PROGRESS_STORE.setdefault(task_id, []).append(payload)
 
         yield _sse({"event": "start", "task_id": task_id, "topic": req.topic})
 
-        # 在后台跑流水线，主循环从队列读事件并 yield
         async def runner():
             try:
                 await run_writing_pipeline(
@@ -56,6 +59,7 @@ async def write_article(req: WriteRequest) -> StreamingResponse:
                     enable_rag=req.enable_rag,
                     enable_search=req.enable_search,
                     collection=req.collection,
+                    user_keys=user_keys,
                     send=emit,
                 )
                 emit({"event": "done"})
@@ -79,7 +83,6 @@ async def write_article(req: WriteRequest) -> StreamingResponse:
 
 @router.get("/article/{task_id}")
 async def get_writing_task(task_id: str) -> dict:
-    """查询一次写作任务的所有阶段事件（用于加载历史流水线）。"""
     events = _PROGRESS_STORE.get(task_id)
     if events is None:
         raise HTTPException(status_code=404, detail="task 不存在或已过期")
@@ -87,8 +90,10 @@ async def get_writing_task(task_id: str) -> dict:
 
 
 @router.post("/article/sync")
-async def write_article_sync(req: WriteRequest) -> dict:
-    """非流式版本：一次性返回完整结果（便于测试和简单集成）。"""
+async def write_article_sync(
+    req: WriteRequest,
+    user_keys: dict = Depends(get_user_keys),
+) -> dict:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
 
@@ -106,6 +111,7 @@ async def write_article_sync(req: WriteRequest) -> dict:
         enable_rag=req.enable_rag,
         enable_search=req.enable_search,
         collection=req.collection,
+        user_keys=user_keys,
         send=collect,
     )
 

@@ -4,41 +4,54 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import clsx from 'clsx';
 import type { ChatMessage } from '@/lib/api';
 
 interface Props { message: ChatMessage; }
 
 export default function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user';
-  const isAssistant = message.role === 'assistant';
 
   return (
-    <div className={`flex animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+      {!isUser && (
+        <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white text-xs font-bold shadow-soft-sm">
+          M
+        </div>
+      )}
       <div
-        className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm
-          ${isUser
-            ? 'bg-brand-500 text-white rounded-tr-sm'
-            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-sm border border-slate-200 dark:border-slate-700'}`}
+        className={clsx(
+          'max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-soft-sm animate-fade-in',
+          isUser
+            ? 'bg-brand-600 text-white rounded-tr-sm'
+            : 'bg-surface border border-border rounded-tl-sm'
+        )}
       >
         {!isUser && (
-          <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
-            {message.role === 'assistant' ? 'MiniAI' : message.role}
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-text-mute mb-1.5">
+            MiniAI
           </div>
         )}
         {message.content && (
-          <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+          <div className={clsx(
+            'prose prose-sm max-w-none leading-relaxed',
+            isUser ? 'prose-invert' : 'dark:prose-invert'
+          )}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 code({ inline, className, children, ...props }: any) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
-                    <SyntaxHighlighter style={oneDark as any} language={match[1]} PreTag="div">
+                    <SyntaxHighlighter style={oneDark as any} language={match[1]} PreTag="div" customStyle={{ margin: 0, borderRadius: 10 }}>
                       {String(children).replace(/\n$/, '')}
                     </SyntaxHighlighter>
                   ) : (
                     <code className={className} {...props}>{children}</code>
                   );
+                },
+                a({ children, ...props }: any) {
+                  return <a {...props} target="_blank" rel="noreferrer">{children}</a>;
                 },
               }}
             >
@@ -47,6 +60,11 @@ export default function MessageBubble({ message }: Props) {
           </div>
         )}
       </div>
+      {isUser && (
+        <div className="w-8 h-8 shrink-0 rounded-lg bg-bg-soft grid place-items-center text-text-soft text-sm shadow-soft-sm">
+          👤
+        </div>
+      )}
     </div>
   );
 }

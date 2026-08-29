@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Topbar from '@/components/Topbar';
 import Sidebar from '@/components/Sidebar';
 import ChatWindow from '@/components/ChatWindow';
 import { useChatStore } from '@/lib/store';
@@ -13,7 +14,6 @@ export default function HomePage() {
     api.listModels()
       .then(({ models }) => {
         setModels(models);
-        // 若当前模型不可用，自动选第一个可用的
         if (!models.find((m) => m.id === currentModel && m.enabled)) {
           const first = models.find((m) => m.enabled);
           if (first) setCurrentModel(first.id);
@@ -23,9 +23,12 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="h-screen flex">
-      <Sidebar />
-      <ChatWindow />
-    </main>
+    <div className="h-screen flex flex-col bg-bg">
+      <Topbar />
+      <div className="flex-1 flex overflow-hidden">
+        <Sidebar />
+        <ChatWindow />
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
+import Topbar from '@/components/Topbar';
 import AgentPipeline from '@/components/AgentPipeline';
 import { useChatStore } from '@/lib/store';
 import {
@@ -10,22 +10,25 @@ import {
 } from '@/lib/write';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import clsx from 'clsx';
+import { useUserKeys } from '@/lib/user-keys';
 
-const STYLES: Array<{ v: Style; label: string; desc: string }> = [
-  { v: 'blog', label: '📝 博客', desc: '轻松、技术向' },
-  { v: 'academic', label: '🎓 学术', desc: '严谨、引证' },
-  { v: 'report', label: '📊 报告', desc: '数据、结论先行' },
-  { v: 'social', label: '💬 社交', desc: '短小、抓眼球' },
+const STYLES: Array<{ v: Style; label: string; desc: string; emoji: string }> = [
+  { v: 'blog', label: '博客', desc: '轻松、技术向', emoji: '📝' },
+  { v: 'academic', label: '学术', desc: '严谨、引证', emoji: '🎓' },
+  { v: 'report', label: '报告', desc: '数据、结论先行', emoji: '📊' },
+  { v: 'social', label: '社交', desc: '短小、抓眼球', emoji: '💬' },
 ];
 
 const LENGTHS: Array<{ v: Length; label: string; words: string }> = [
-  { v: 'short', label: '简短', words: '~1000 字 / 3 章' },
-  { v: 'medium', label: '中等', words: '~2000 字 / 4 章' },
-  { v: 'long', label: '深度', words: '~3500 字 / 6 章' },
+  { v: 'short', label: '简短', words: '~1k 字 / 3 章' },
+  { v: 'medium', label: '中等', words: '~2k 字 / 4 章' },
+  { v: 'long', label: '深度', words: '~3.5k 字 / 6 章' },
 ];
 
 export default function WritePage() {
   const { models, currentModel } = useChatStore();
+  const { hasAny } = useUserKeys();
   const enabledModels = models.filter((m) => m.enabled);
 
   const [topic, setTopic] = useState('');
@@ -88,145 +91,230 @@ export default function WritePage() {
   };
 
   const isRunning = state.overall === 'running';
+  const completedSections = state.researchers.filter((r) => r.status === 'done').length;
+  const totalSteps = 1 + state.researchers.length + 1; // Planner + Researchers + Writer
+  const completedSteps =
+    (state.planner.status === 'done' ? 1 : 0) +
+    completedSections +
+    (state.writer.status === 'done' ? 1 : 0);
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   return (
-    <main className="h-screen flex">
-      <Sidebar />
-      <section className="flex-1 flex overflow-hidden">
+    <div className="h-screen flex flex-col bg-bg">
+      <Topbar />
+      <div className="flex-1 flex overflow-hidden">
         {/* 左侧：表单 */}
-        <aside className="w-80 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto p-5">
-          <h1 className="text-xl font-bold mb-1">✍️ 多智能体写作</h1>
-          <p className="text-xs text-slate-500 mb-4">Planner → Researchers → Writer，5 个 Agent 协同</p>
+        <aside className="w-80 shrink-0 border-r border-border bg-surface overflow-y-auto">
+          <div className="p-5 space-y-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-2xl">✍️</span>
+                <h1 className="font-serif text-xl font-semibold">多智能体写作</h1>
+              </div>
+              <p className="text-xs text-text-mute">5 个 Agent 协同：Planner → Researchers → Writer</p>
+            </div>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">主题 *</label>
-          <textarea
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="例：RAG 技术原理与实践"
-            className="w-full text-sm px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 min-h-[70px]"
-          />
+            <Field label="主题" required>
+              <textarea
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="例：RAG 技术原理与实践"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 transition min-h-[70px] resize-none"
+              />
+            </Field>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mt-4 mb-1">风格</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {STYLES.map((s) => (
-              <button
-                key={s.v}
-                onClick={() => setStyle(s.v)}
-                className={`text-xs px-2 py-1.5 rounded-md border ${style === s.v ? 'bg-brand-500 text-white border-brand-500' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            <Field label="风格">
+              <div className="grid grid-cols-2 gap-1.5">
+                {STYLES.map((s) => (
+                  <button
+                    key={s.v}
+                    onClick={() => setStyle(s.v)}
+                    className={clsx(
+                      'text-left text-xs px-2.5 py-2 rounded-lg border transition',
+                      style === s.v
+                        ? 'border-brand-400 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200'
+                        : 'border-border hover:bg-bg-soft'
+                    )}
+                  >
+                    <div className="font-medium">{s.emoji} {s.label}</div>
+                    <div className="text-[10px] text-text-mute mt-0.5">{s.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="长度">
+              <div className="space-y-1">
+                {LENGTHS.map((l) => (
+                  <button
+                    key={l.v}
+                    onClick={() => setLength(l.v)}
+                    className={clsx(
+                      'w-full text-left text-xs px-2.5 py-2 rounded-lg border transition',
+                      length === l.v
+                        ? 'border-brand-400 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200'
+                        : 'border-border hover:bg-bg-soft'
+                    )}
+                  >
+                    <div className="font-medium">{l.label} <span className="font-normal text-text-mute">· {l.words}</span></div>
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="模型">
+              <select
+                value={currentModel}
+                onChange={(e) => useChatStore.setState({ currentModel: e.target.value })}
+                disabled={isRunning}
+                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 transition"
               >
-                <div className="font-medium">{s.label}</div>
-                <div className="text-[10px] opacity-70">{s.desc}</div>
-              </button>
-            ))}
-          </div>
+                {enabledModels.length === 0 && <option value="">先配置 API Key</option>}
+                {enabledModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </Field>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mt-4 mb-1">长度</label>
-          <div className="space-y-1">
-            {LENGTHS.map((l) => (
-              <button
-                key={l.v}
-                onClick={() => setLength(l.v)}
-                className={`w-full text-left text-xs px-2 py-1.5 rounded-md border ${length === l.v ? 'bg-brand-50 border-brand-400 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200' : 'border-slate-200 dark:border-slate-700'}`}
-              >
-                <div className="font-medium">{l.label} · {l.words}</div>
-              </button>
-            ))}
-          </div>
+            <Field label="增强">
+              <div className="space-y-1.5">
+                <CheckboxRow checked={enableRag} onChange={setEnableRag} emoji="📚" label="调用知识库" />
+                <CheckboxRow checked={enableSearch} onChange={setEnableSearch} emoji="🌐" label="启用联网搜索" />
+              </div>
+            </Field>
 
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mt-4 mb-1">
-            模型 <span className="font-normal text-slate-400">({enabledModels.length} 可用)</span>
-          </label>
-          <select
-            value={currentModel}
-            onChange={(e) => useChatStore.setState({ currentModel: e.target.value })}
-            disabled={isRunning}
-            className="w-full text-sm px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-          >
-            {enabledModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
+            <Field label="自定义大纲" hint="可选，每行一章">
+              <textarea
+                value={customOutline}
+                onChange={(e) => setCustomOutline(e.target.value)}
+                placeholder={'什么是 RAG\n核心原理\n实战案例'}
+                className="w-full text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 transition min-h-[60px] resize-none"
+              />
+            </Field>
 
-          <div className="mt-4 space-y-2">
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={enableRag} onChange={(e) => setEnableRag(e.target.checked)} />
-              📚 调用本地知识库
-            </label>
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={enableSearch} onChange={(e) => setEnableSearch(e.target.checked)} />
-              🌐 启用联网搜索
-            </label>
-          </div>
-
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mt-4 mb-1">
-            自定义大纲 <span className="font-normal text-slate-400">（可选，每行一章）</span>
-          </label>
-          <textarea
-            value={customOutline}
-            onChange={(e) => setCustomOutline(e.target.value)}
-            placeholder={'什么是 RAG\n核心原理\n实战案例'}
-            className="w-full text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 min-h-[60px]"
-          />
-
-          <div className="flex gap-2 mt-5">
             {!isRunning ? (
               <button
                 onClick={start}
-                disabled={!topic.trim()}
-                className="flex-1 py-2 rounded-md bg-brand-500 hover:bg-brand-600 disabled:bg-slate-300 text-white text-sm font-medium"
-              >开始写作</button>
+                disabled={!topic.trim() || !hasAny}
+                className="w-full btn btn-primary !py-2.5 shadow-soft-sm hover:shadow-soft-md"
+              >
+                ✨ 开始写作
+              </button>
             ) : (
-              <button onClick={stop} className="flex-1 py-2 rounded-md bg-red-500 hover:bg-red-600 text-white text-sm font-medium">停止</button>
+              <button onClick={stop} className="w-full btn bg-red-100 text-red-700 hover:bg-red-200 !py-2.5">
+                停止生成
+              </button>
             )}
           </div>
         </aside>
 
-        {/* 右侧：流水线 / 文章 */}
-        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
-          <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('pipeline')}
-              className={`text-sm px-3 py-1 rounded ${activeTab === 'pipeline' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              🔄 流水线 ({state.researchers.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('article')}
-              className={`text-sm px-3 py-1 rounded ${activeTab === 'article' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              📄 文章 {state.writer.article && `(${state.writer.wordCount}字)`}
-            </button>
-            <div className="flex-1" />
-            {state.writer.article && (
-              <button onClick={downloadMd} className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
-                ⬇️ 下载 .md
-              </button>
-            )}
+        {/* 右侧：进度 + 文章 */}
+        <div className="flex-1 flex flex-col bg-bg overflow-hidden">
+          {/* 顶部进度条 */}
+          <div className="border-b border-border-soft bg-surface/50 px-5 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab('pipeline')}
+                  className={clsx(
+                    'text-sm px-3 py-1 rounded-md transition',
+                    activeTab === 'pipeline'
+                      ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200 font-medium'
+                      : 'text-text-soft hover:bg-bg-soft'
+                  )}
+                >
+                  🔄 流水线
+                </button>
+                <button
+                  onClick={() => setActiveTab('article')}
+                  disabled={!state.writer.article}
+                  className={clsx(
+                    'text-sm px-3 py-1 rounded-md transition',
+                    activeTab === 'article'
+                      ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200 font-medium'
+                      : 'text-text-soft hover:bg-bg-soft disabled:opacity-40'
+                  )}
+                >
+                  📄 文章 {state.writer.article && `· ${state.writer.wordCount}字`}
+                </button>
+              </div>
+              {state.writer.article && (
+                <button onClick={downloadMd} className="btn btn-secondary !py-1.5 text-xs">
+                  ⬇️ 下载 .md
+                </button>
+              )}
+            </div>
+            {/* 进度条 */}
+            <div className="h-1.5 bg-bg-soft rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-1.5 text-[10px] text-text-mute">
+              <span>
+                {state.planner.status === 'done' ? '✓' : state.planner.status === 'running' ? '⏳' : '○'} Planner ·{' '}
+                {completedSections}/{state.researchers.length} Researcher ·{' '}
+                {state.writer.status === 'done' ? '✓' : state.writer.status === 'running' ? '⏳' : '○'} Writer
+              </span>
+              <span>{Math.round(progress)}%</span>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto">
             {activeTab === 'pipeline' ? (
-              <div className="max-w-2xl mx-auto">
+              <div className="max-w-2xl mx-auto p-6">
                 <AgentPipeline state={state} />
                 {state.error && (
-                  <div className="mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+                  <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm animate-fade-in">
                     ⚠️ {state.error}
                   </div>
                 )}
               </div>
             ) : (
-              <article className="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 prose dark:prose-invert max-w-none">
+              <article className="max-w-3xl mx-auto p-6">
                 {state.writer.article ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
+                  <div className="bg-surface rounded-2xl shadow-soft-sm border border-border p-8 md:p-10 animate-fade-in">
+                    <div className="prose prose-base max-w-none font-serif">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="text-center text-slate-400 py-12">
-                    <div className="text-5xl mb-2">📝</div>
-                    <div>文章生成后将显示在这里</div>
+                  <div className="text-center text-text-mute py-16">
+                    <div className="text-5xl mb-3">📝</div>
+                    <div className="font-serif text-lg">文章生成后将显示在这里</div>
                   </div>
                 )}
               </article>
             )}
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="flex items-center justify-between text-xs font-semibold text-text-soft mb-1.5">
+        <span>{label} {required && <span className="text-red-500">*</span>}</span>
+        {hint && <span className="font-normal text-text-mute">{hint}</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function CheckboxRow({ checked, onChange, emoji, label }: { checked: boolean; onChange: (v: boolean) => void; emoji: string; label: string }) {
+  return (
+    <label className="flex items-center gap-2 text-xs cursor-pointer hover:text-text transition">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-3.5 h-3.5 accent-brand-600 cursor-pointer"
+      />
+      <span>{emoji}</span>
+      <span>{label}</span>
+    </label>
   );
 }
