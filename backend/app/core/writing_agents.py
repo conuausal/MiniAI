@@ -122,7 +122,7 @@ async def planner_agent(
 
     user_prompt = "\n".join(user_prompt_parts)
 
-    raw = await chat_once(
+    result = await chat_once(
         model=model,
         messages=[
             {"role": "system", "content": PLANNER_SYSTEM},
@@ -131,7 +131,7 @@ async def planner_agent(
         temperature=0.6,
         max_tokens=1500,
     )
-
+    raw = result["text"] if isinstance(result, dict) else result
     return _parse_outline(raw, fallback_topic=topic, length=length)
 
 
@@ -243,7 +243,7 @@ async def researcher_agent(
 
 请基于以上素材，输出本章节的调研笔记（bullet 列表）。"""
 
-    notes = await chat_once(
+    result = await chat_once(
         model=model,
         messages=[
             {"role": "system", "content": RESEARCHER_SYSTEM},
@@ -252,6 +252,7 @@ async def researcher_agent(
         temperature=0.4,
         max_tokens=1500,
     )
+    notes = result["text"] if isinstance(result, dict) else result
 
     return SectionDraft(
         section_id=item.section_id,
@@ -321,7 +322,7 @@ async def writer_agent(
 
 请撰写完整文章。"""
 
-    article = await chat_once(
+    result = await chat_once(
         model=model,
         messages=[
             {"role": "system", "content": WRITER_SYSTEM},
@@ -330,6 +331,7 @@ async def writer_agent(
         temperature=0.7,
         max_tokens=4000,
     )
+    article = result["text"] if isinstance(result, dict) else result
     return article
 
 

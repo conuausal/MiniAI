@@ -31,8 +31,8 @@ next-env.d.ts
 *.key
 
 # 数据与缓存
-data/vector_store/
-data/uploads/
+backend/data/
+data/
 *.db
 *.sqlite
 *.sqlite3

@@ -1,4 +1,4 @@
-"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
+﻿"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
 from __future__ import annotations
 
 import json
@@ -91,7 +91,7 @@ async def _build_initial_messages(
 
 # ---------- 非流式（含工具循环） ----------
 
-@router.post("/completions")
+@router.post("/completions", response_model=None)
 async def chat_completions(
     req: ChatRequest,
     db: AsyncSession = Depends(get_session),
