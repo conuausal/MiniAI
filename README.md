@@ -1,4 +1,4 @@
-﻿<div align="center">
+﻿﻿<div align="center">
 
 # 🧠 MiniAI
 
@@ -299,6 +299,23 @@ MiniAI 起始于一份个人痛点清单（见 [`我的日常痛点.md.md`](./�
 - 「为 XX 主题准备一份学术综述」
 
 可视化卡片会实时显示每个 Agent 的运行状态、章节大纲、调研笔记，让 AI 的"思考过程"对你完全透明（这正是你痛点 P3「操作可视化」的落地）。
+
+
+
+### 🤖 支持的模型（v0.5.0 · 25 个内置 + 任意自定义）
+
+| Provider | 模型 | 说明 |
+|:--|:--|:--|
+| 🐋 DeepSeek | V3 · R1 · Coder-V2 | 中文性价比之王 |
+| 🧠 OpenAI | GPT-4o · mini · 4-Turbo · 3.5-Turbo · o1 · o1-mini | 海外旗舰 |
+| 🤖 MiniMax | **M3** · Text-01 · abab6.5s | 多模态旗舰 |
+| 🀄 智谱 GLM | 4-Plus · 4-Flash（免费）· 4-Long | 国产 |
+| 🌙 Moonshot Kimi | 128K · 32K · 8K | 超长上下文 |
+| ☁️ 通义千问 Qwen | Max · Plus · Turbo · Long | 阿里 DashScope |
+| 💎 Google Gemini | 1.5 Pro · 1.5 Flash · 2.0 Flash Exp | 多模态 |
+| ⚙️ **自定义** | **任意 OpenAI 兼容服务** | 在 🔑 抽屉里添加 Base URL + 模型 |
+
+每个模型都有标签徽章：推荐 / 推理 / 代码 / 快速 / 经济 / 中文 / 长文本 / 多模态 / 免费 / 最新
 
 ### 我能不能纯本地跑、不花钱？
 
