@@ -2,28 +2,44 @@
 
 所有显著变更都会记录在此文件。版本遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.3.0] - 2026-08-29
+
+### ✨ Added
+
+- 🤖 **多智能体写作（Planner → Researchers → Writer）**
+  - 4 个 Agent 协同：
+    - 🧭 **Planner**：主编，把主题拆解为 N 个章节的大纲
+    - 🔍 **Researcher** × N：并行调研员，每个章节独立收集素材（可调用 RAG + 联网搜索）
+    - ✍️ **Writer**：撰稿人，综合所有章节素材生成最终文章
+  - 3 种长度预设：简短（约 1000 字）/ 中等（约 2000 字）/ 深度（约 3500 字）
+  - 4 种风格预设：博客 / 学术 / 商业报告 / 社交媒体
+  - 可选自定义大纲（每行一章）
+  - SSE 流式推送每个 Agent 的状态变化，前端实时可视化流水线
+  - 一键下载最终文章为 `.md` 文件
+- 新增 `POST /api/write/article`（SSE 流式）+ `POST /api/write/article/sync`（同步调试）+ `GET /api/write/article/{task_id}`（任务历史）
+- 新增前端页面 `/write`：左侧表单 + 右侧双 Tab（流水线视图 / 文章预览）
+
+### 🔧 Changed
+
+- `app/main.py`：版本号 0.2.0 → 0.3.0，新增 write 路由
+- `app/models/schemas.py`：新增 `WriteRequest` / `OutlineSection` / `SectionResearch` / `WritingResultResponse`
+- `Sidebar`：新增"✍️ 多智能体写作"入口
+- `README.md`：功能矩阵更新、Roadmap 多智能体条目标记完成
+
+### 🎯 设计目标
+
+- ✅ 痛点 P2「多智能体协作」：「对复杂任务，能自己分解（如市场竞品分析）→ 自动调用搜索Agent、数据整理Agent、报告撰写Agent」
+- ✅ 痛点 P3「操作可视化 / ReAct 推理链条」：前端展示每个 Agent 的运行状态 + 输出内容
+
+---
+
 ## [0.2.0] - 2026-08-29
 
 ### ✨ Added
 
 - 🛠️ **Function Calling（工具调用）** —— OpenAI 兼容 `tools` 标准，支持多轮工具调用循环
-  - 内置 5 个实用工具：
-    - `get_current_time` ⏰ 获取当前时间（早上汇报、下班日报刚需）
-    - `calculate` 🧮 安全数学计算（沙箱表达式求值）
-    - `web_search` 🌐 包装现有联网搜索
-    - `query_knowledge` 📚 包装现有 RAG 检索
-    - `read_file` 📄 读取项目目录 / 上传目录内的文本文件（路径白名单防穿越）
-  - 自动循环：检测到 `tool_calls` → 执行 → 结果以 `role=tool` 回填 → LLM 再次生成，最多 3 轮
-  - 前端工具调用可视化卡片（黄色折叠面板，显示每个工具的名称 / 参数 / 结果）
-  - 新增 `GET /api/tools` 列出所有可用工具
-  - 新增 SSE 事件类型：`tool_call`、`tool_result`
-
-### 🔧 Changed
-
-- `app/core/llm.py`：流式 / 非流式接口增加 `tools` 参数，支持增量 `tool_calls` 累积
-- `app/main.py`：版本号 0.1.0 → 0.2.0，新增 tools 路由
-- 前端 ModelSelector 增加 🔧 工具开关（amber 配色）
-- 设置页增加"Function Calling 工具"清单展示
+  - 内置 5 个实用工具：`get_current_time` / `calculate` / `web_search` / `query_knowledge` / `read_file`
+  - 自动循环最多 3 轮；前端琥珀色折叠卡片可视化
 
 ---
 
@@ -31,24 +47,4 @@
 
 ### ✨ Added
 
-- 🎉 首个 MVP 版本
-- **后端 (FastAPI)**
-  - 多模型路由：DeepSeek / OpenAI / 智谱 GLM 等 OpenAI 兼容协议
-  - 流式聊天 (SSE) + 自动对话记忆
-  - RAG 引擎：PDF / DOCX / TXT / Markdown → ChromaDB → 向量检索
-  - 联网搜索：Tavily 集成
-  - SQLite 持久化会话与消息
-- **前端 (Next.js 14)**
-  - 聊天 UI：Markdown / 代码高亮 / 流式渲染
-  - 模型选择器 + RAG / 联网开关
-  - 历史会话侧边栏
-  - 知识库管理：上传 / 检索 / 删除
-  - 设置页：模型可用性 / 一键重新加载
-- **部署**
-  - `docker-compose.yml` 一键启动
-  - 后端 / 前端独立 Dockerfile（多阶段构建）
-- **开源**
-  - MIT License
-  - 中英双语 README
-  - CONTRIBUTING / CHANGELOG
-  - GitHub Actions CI（Python lint + 前端 lint/build）
+- 🎉 首个 MVP：多模型 + RAG + 联网搜索 + 对话记忆 + 流式输出 + Docker 一键部署

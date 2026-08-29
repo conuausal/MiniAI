@@ -92,3 +92,41 @@ class ToolInfo(BaseModel):
 
 class ToolListResponse(BaseModel):
     tools: List[ToolInfo]
+
+
+# ============== Multi-Agent Writing ==============
+
+class WriteRequest(BaseModel):
+    topic: str = Field(..., min_length=2, max_length=300, description="写作主题")
+    style: Literal["blog", "academic", "report", "social"] = "blog"
+    length: Literal["short", "medium", "long"] = "medium"
+    outline: Optional[List[str]] = Field(default=None, description="可选的自定义章节标题")
+    model: str = "deepseek-chat"
+    enable_rag: bool = False
+    enable_search: bool = False
+    collection: str = "default"
+
+
+class OutlineSection(BaseModel):
+    section_id: str
+    title: str
+    focus: str
+    angle: str = ""
+    search_queries: List[str] = []
+
+
+class SectionResearch(BaseModel):
+    section_id: str
+    title: str
+    notes: str
+    sources: List[str] = []
+
+
+class WritingResultResponse(BaseModel):
+    topic: str
+    style: str
+    length: str
+    word_count: int
+    outline: List[OutlineSection]
+    sections: List[SectionResearch]
+    article_md: str

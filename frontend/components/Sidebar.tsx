@@ -44,7 +44,7 @@ export default function Sidebar() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white font-bold">M</div>
           <div>
             <div className="font-semibold leading-tight">MiniAI</div>
-            <div className="text-[10px] text-slate-500">开源个人助手 · v0.1</div>
+            <div className="text-[10px] text-slate-500">开源个人助手 · v0.3</div>
           </div>
         </div>
         <button
@@ -57,6 +57,7 @@ export default function Sidebar() {
 
       <nav className="px-2 py-2 text-sm">
         <Link href="/" className="block px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">💬 对话</Link>
+        <Link href="/write" className="block px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">✍️ 多智能体写作</Link>
         <Link href="/knowledge" className="block px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">📚 知识库</Link>
         <Link href="/settings" className="block px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">⚙️ 设置</Link>
       </nav>
@@ -86,7 +87,7 @@ export default function Sidebar() {
       </div>
 
       <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500">
-        <a className="hover:underline" href="https://github.com/" target="_blank" rel="noreferrer">⭐ Star on GitHub</a>
+        <a className="hover:underline" href="https://github.com/conuausal/MiniAI" target="_blank" rel="noreferrer">⭐ Star on GitHub</a>
       </div>
     </aside>
   );
