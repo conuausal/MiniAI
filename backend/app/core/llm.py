@@ -17,6 +17,11 @@ from typing import AsyncIterator, Dict, List, Optional
 from loguru import logger
 from openai import AsyncOpenAI
 
+from app.core.demo_provider import (
+    DemoClient, generate_reply, is_demo_provider,
+    planner_for_demo, researcher_for_demo, writer_for_demo,
+)
+
 from app.config import settings
 from app.models.schemas import ModelInfo
 
@@ -32,12 +37,16 @@ PROVIDER_DEFAULTS: Dict[str, Dict[str, str]] = {
     "qwen":      {"label": "通义千问 Qwen",    "emoji": "☁️", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
     "gemini":    {"label": "Google Gemini",    "emoji": "💎", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"},
     "ollama":    {"label": "Ollama 本地",      "emoji": "🦙", "base_url": "http://localhost:11434/v1"},
+    "demo":      {"label": "MiniAI 演示",       "emoji": "🎭", "base_url": ""},
 }
 
 
 # ---------- 模型注册表（20+ 模型） ----------
 
 MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
+    # === 🎭 MiniAI 演示模式（免 Key） ===
+    "miniai-demo":      {"provider": "demo",      "label": "MiniAI 演示模式",   "tags": ["免Key", "演示"]},
+    "miniai-demo-fast": {"provider": "demo",      "label": "MiniAI Demo (快速)", "tags": ["免Key", "演示", "快速"]},
     # === 🐋 DeepSeek ===
     "deepseek-chat":      {"provider": "deepseek",  "label": "DeepSeek-V3",       "tags": ["推荐", "中文"]},
     "deepseek-reasoner":  {"provider": "deepseek",  "label": "DeepSeek-R1",       "tags": ["推理"]},
@@ -162,6 +171,7 @@ def _get_env_keys() -> Dict[str, Dict[str, str]]:
         "moonshot":  {"api_key": settings.moonshot_api_key,  "base_url": PROVIDER_DEFAULTS["moonshot"]["base_url"]},
         "qwen":      {"api_key": settings.qwen_api_key,      "base_url": PROVIDER_DEFAULTS["qwen"]["base_url"]},
         "gemini":    {"api_key": settings.gemini_api_key,    "base_url": PROVIDER_DEFAULTS["gemini"]["base_url"]},
+        "demo":      {"api_key": "__demo__", "base_url": "__demo__"},
     }
 
 
@@ -179,6 +189,9 @@ def get_effective_keys(user_keys: Dict[str, str]) -> Dict[str, Dict[str, str]]:
 
 
 def _client(provider: str, effective_keys: Dict[str, Dict[str, str]]) -> Optional[AsyncOpenAI]:
+    """演示模式：永远可用。其他 provider 必须有 key。"""
+    if is_demo_provider(provider):
+        return DemoClient()  # type: ignore[return-value]
     info = effective_keys.get(provider)
     if not info:
         return None
@@ -187,8 +200,6 @@ def _client(provider: str, effective_keys: Dict[str, Dict[str, str]]) -> Optiona
     if not api_key or not base_url:
         return None
     return AsyncOpenAI(api_key=api_key, base_url=base_url)
-
-
 def _custom_provider_client(custom: Dict[str, dict], provider_id: str) -> Optional[AsyncOpenAI]:
     info = custom.get(provider_id)
     if not info:
@@ -333,7 +344,7 @@ async def chat_once(
         msg = choice.message
         return {
             "text": msg.content or "",
-            "tool_calls": [tc.model_dump() for tc in (msg.tool_calls or [])],
+            "tool_calls": [tc if isinstance(tc, dict) else tc.model_dump() for tc in (msg.tool_calls or [])],
             "finish_reason": choice.finish_reason,
         }
     except Exception as e:

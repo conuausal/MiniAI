@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { create } from 'zustand';
 import { ChatMessage, ModelInfo, SessionInfo, ToolCallRecord } from './api';
@@ -47,7 +47,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   toolRecords: {},
   models: [],
-  currentModel: 'deepseek-chat',
+  currentModel: 'miniai-demo',
   enableRag: false,
   enableSearch: false,
   enableTools: false,

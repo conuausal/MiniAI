@@ -1,4 +1,4 @@
-﻿"""多智能体写作：Planner → 并行 Researchers → Writer。
+"""多智能体写作：Planner → 并行 Researchers → Writer。
 
 每个 Agent 都是一次独立的 LLM 调用 + （可选）RAG/联网搜索。
 通过 asyncio.gather 让多个 Researcher 并行执行，最后 Writer 整合。
@@ -13,9 +13,10 @@ from typing import AsyncIterator, List, Optional
 
 from loguru import logger
 
-from app.core.llm import chat_once
+from app.core.llm import chat_once, MODEL_REGISTRY
 from app.core.rag import rag_engine
 from app.core.web_search import format_for_prompt, web_search
+from app.core.demo_provider import planner_for_demo, researcher_for_demo, writer_for_demo
 
 
 # ============== 数据结构 ==============
@@ -123,6 +124,19 @@ async def planner_agent(
         user_prompt_parts.append(f"\n请设计约 {default_n} 个章节。")
 
     user_prompt = "\n".join(user_prompt_parts)
+
+    # Demo 模型走专用路径
+    if model in MODEL_REGISTRY and MODEL_REGISTRY[model].get("provider") == "demo":
+        outline_items = planner_for_demo(topic, style, length)
+        return [
+            type("O", (), {
+                "section_id": f"sec-{i+1}",
+                "title": o["title"],
+                "focus": o["focus"],
+                "angle": o["angle"],
+                "search_queries": o.get("search_queries", []),
+            })() for i, o in enumerate(outline_items)
+        ]
 
     result = await chat_once(
         model=model,
@@ -249,6 +263,21 @@ async def researcher_agent(
 
 请基于以上素材，输出本章节的调研笔记（bullet 列表）。"""
 
+    # Demo 模型
+    if model in MODEL_REGISTRY and MODEL_REGISTRY[model].get("provider") == "demo":
+        notes_text = researcher_for_demo({
+            "title": item.title,
+            "focus": item.focus,
+            "angle": item.angle,
+        }, topic)
+        return SectionDraft(
+            section_id=item.section_id,
+            title=item.title,
+            research_notes=notes_text,
+            draft="",
+            sources=[],
+        )
+
     result = await chat_once(
         model=model,
         messages=[
@@ -331,6 +360,10 @@ async def writer_agent(
 {sources_text}
 
 请撰写完整文章。"""
+
+    # Demo 模型
+    if model in MODEL_REGISTRY and MODEL_REGISTRY[model].get("provider") == "demo":
+        return writer_for_demo(outline, sections, topic, style)
 
     result = await chat_once(
         model=model,
