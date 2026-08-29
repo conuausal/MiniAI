@@ -23,86 +23,105 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 h-14 px-5 flex items-center justify-between glass">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white text-xs font-bold shadow-soft-sm group-hover:shadow-soft-md transition">
-              M
-            </div>
-            <span className="font-serif font-semibold text-base tracking-tight">MiniAI</span>
-          </Link>
+      <header className="sticky top-0 z-30">
+        <div className="glass-strong h-14 px-5 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 rounded-xl bg-hero grid place-items-center text-white font-bold shadow-glow-blue group-hover:scale-110 transition-transform">
+                M
+              </div>
+              <span className="font-serif font-semibold text-base tracking-tight text-hero">
+                MiniAI
+              </span>
+            </Link>
 
-          <nav className="flex items-center gap-1">
-            {navItems.map((item) => {
-              const active = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`relative px-3 py-1.5 text-sm rounded-lg transition ${
-                    active
-                      ? 'text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30'
-                      : 'text-text-soft hover:text-text hover:bg-bg-soft'
-                  }`}
-                >
-                  <span className="mr-1.5">{item.emoji}</span>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+            <nav className="flex items-center gap-1">
+              {navItems.map((item) => {
+                const active = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`relative px-3 py-1.5 text-sm rounded-lg transition-all ${
+                      active
+                        ? 'text-text bg-surface shadow-soft-sm font-medium'
+                        : 'text-text-soft hover:text-text hover:bg-surface/50'
+                    }`}
+                  >
+                    <span className="mr-1.5">{item.emoji}</span>
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
 
-        <div className="flex items-center gap-1">
-          {/* 语音输出开关 */}
-          <button
-            onClick={() => setEnableVoiceOutput(!enableVoiceOutput)}
-            className={`btn !p-2 text-base ${enableVoiceOutput ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200' : 'btn-ghost'}`}
-            title={enableVoiceOutput ? '🔊 自动朗读开启' : '🔇 点击开启自动朗读'}
-          >
-            {enableVoiceOutput ? '🔊' : '🔇'}
-          </button>
-          {/* 语音输入开关 */}
-          <button
-            onClick={() => setEnableVoiceInput(!enableVoiceInput)}
-            className={`btn !p-2 text-base ${enableVoiceInput ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200' : 'btn-ghost'}`}
-            title={enableVoiceInput ? '🎙️ 语音输入开启' : '🎙 点击开启语音输入'}
-          >
-            🎙️
-          </button>
-          {/* 主题 */}
-          <button
-            onClick={toggle}
-            className="btn-ghost btn !p-2"
-            title={isDark ? '切换到亮色' : '切换到暗色'}
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-          {/* 设置（Key 管理） */}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className={`btn !p-2 relative ${hasAny ? 'btn-ghost' : 'btn-secondary border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20'}`}
-            title="设置"
-          >
-            <span className="text-base">🔑</span>
-            {!hasAny && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full animate-pulse-soft" />
-            )}
-          </button>
-          <a
-            href="https://github.com/conuausal/MiniAI"
-            target="_blank"
-            rel="noreferrer"
-            className="btn-ghost btn !p-2"
-            title="GitHub"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-            </svg>
-          </a>
+          <div className="flex items-center gap-1.5">
+            <IconButton
+              active={enableVoiceOutput}
+              onClick={() => setEnableVoiceOutput(!enableVoiceOutput)}
+              emoji={enableVoiceOutput ? '🔊' : '🔇'}
+              label={enableVoiceOutput ? '语音输出已开启' : '语音输出已关闭'}
+              activeColor="pink"
+            />
+            <IconButton
+              active={enableVoiceInput}
+              onClick={() => setEnableVoiceInput(!enableVoiceInput)}
+              emoji="🎙️"
+              label={enableVoiceInput ? '语音输入已开启' : '语音输入已关闭'}
+              activeColor="purple"
+            />
+            <IconButton onClick={toggle} emoji={isDark ? '☀️' : '🌙'} label={isDark ? '切换亮色' : '切换暗色'} />
+            <IconButton
+              onClick={() => setDrawerOpen(true)}
+              emoji="🔑"
+              label="设置"
+              hasBadge={!hasAny}
+            />
+            <a
+              href="https://github.com/conuausal/MiniAI"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-ghost !p-2"
+              title="GitHub"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+            </a>
+          </div>
         </div>
+        {/* 顶部细线渐变 */}
+        <div className="gradient-line" />
       </header>
       <ApiKeyDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
+  );
+}
+
+function IconButton({
+  active, onClick, emoji, label, hasBadge, activeColor,
+}: {
+  active?: boolean; onClick: () => void; emoji: string; label: string;
+  hasBadge?: boolean; activeColor?: 'pink' | 'purple' | 'blue';
+}) {
+  const activeStyle = active
+    ? activeColor === 'pink'
+      ? 'bg-accent-pink/15 text-accent-pink shadow-soft-xs'
+      : activeColor === 'purple'
+        ? 'bg-accent-purple/15 text-accent-purple shadow-soft-xs'
+        : 'bg-primary/15 text-primary shadow-soft-xs'
+    : 'btn-ghost';
+  return (
+    <button
+      onClick={onClick}
+      className={`relative btn !p-2 ${activeStyle}`}
+      title={label}
+    >
+      <span className="text-base">{emoji}</span>
+      {hasBadge && (
+        <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-accent-orange rounded-full animate-pulse-soft ring-2 ring-bg" />
+      )}
+    </button>
   );
 }

@@ -12,6 +12,7 @@ export default function KnowledgePage() {
   const [question, setQuestion] = useState('');
   const [hits, setHits] = useState<Array<{ content: string; source: string; score: number }>>([]);
   const [searching, setSearching] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
@@ -52,24 +53,31 @@ export default function KnowledgePage() {
     await refresh();
   };
 
+  const DOC_COLORS = [
+    'from-accent-pink/10 to-accent-pink/5',
+    'from-accent-purple/10 to-accent-purple/5',
+    'from-accent-cyan/10 to-accent-cyan/5',
+    'from-accent-orange/10 to-accent-orange/5',
+    'from-accent-blue/10 to-accent-blue/5',
+  ];
+
   return (
     <div className="h-screen flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
-          {/* 标题区 */}
           <header className="animate-slide-up">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">📚</span>
-              <h1 className="font-serif text-3xl font-semibold tracking-tight">知识库</h1>
+              <div className="w-12 h-12 rounded-2xl bg-ocean grid place-items-center text-white text-2xl shadow-glow-blue">📚</div>
+              <div>
+                <h1 className="font-serif text-3xl font-semibold tracking-tight">知识库</h1>
+                <p className="text-sm text-text-soft">上传文档，启用 RAG 后可在对话中检索相关内容。</p>
+              </div>
             </div>
-            <p className="text-text-soft ml-12">
-              上传 PDF / DOCX / TXT / Markdown，启用 RAG 后可在对话中检索相关内容。
-            </p>
           </header>
 
-          {/* 上传卡片 */}
-          <section className="surface rounded-2xl p-6 shadow-soft-sm animate-slide-up" style={{ animationDelay: '50ms' }}>
+          {/* 上传区 */}
+          <section className="glass-card rounded-2xl p-6 animate-slide-up" style={{ animationDelay: '50ms' }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">📤 上传文档</h2>
               <div className="flex items-center gap-2">
@@ -84,18 +92,25 @@ export default function KnowledgePage() {
             </div>
 
             <div
-              onDragOver={(e) => { e.preventDefault(); }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
+                setDragOver(false);
                 const file = e.dataTransfer.files?.[0];
                 if (file) onUpload(file);
               }}
-              className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-brand-400 hover:bg-brand-50/30 transition cursor-pointer"
+              className={clsx(
+                'border-2 border-dashed rounded-2xl p-10 text-center transition cursor-pointer',
+                dragOver
+                  ? 'border-primary bg-primary/5 scale-[1.01]'
+                  : 'border-border hover:border-primary/40 hover:bg-primary/5'
+              )}
               onClick={() => fileRef.current?.click()}
             >
-              <div className="text-4xl mb-2">📁</div>
+              <div className="text-5xl mb-3 animate-float">{uploading ? '⏳' : '📁'}</div>
               <div className="text-sm font-medium mb-1">
-                {uploading ? '上传中…' : '拖拽文件到这里，或点击选择'}
+                {uploading ? '上传中…' : dragOver ? '松开鼠标上传' : '拖拽文件到这里，或点击选择'}
               </div>
               <div className="text-xs text-text-mute">支持 PDF · DOCX · TXT · Markdown</div>
               <input
@@ -110,7 +125,7 @@ export default function KnowledgePage() {
           </section>
 
           {/* 文档列表 */}
-          <section className="surface rounded-2xl p-6 shadow-soft-sm animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <section className="glass-card rounded-2xl p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
             <h2 className="font-semibold mb-4">📋 文档列表（{docs.length}）</h2>
             {docs.length === 0 ? (
               <div className="text-sm text-text-mute text-center py-8">
@@ -118,10 +133,13 @@ export default function KnowledgePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {docs.map((d) => (
+                {docs.map((d, i) => (
                   <div
                     key={d.id}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-bg-soft transition group"
+                    className={clsx(
+                      'flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r border border-border-soft hover:shadow-soft-sm transition group',
+                      DOC_COLORS[i % DOC_COLORS.length]
+                    )}
                   >
                     <span className="text-xl">📄</span>
                     <div className="flex-1 min-w-0">
@@ -132,7 +150,7 @@ export default function KnowledgePage() {
                     </div>
                     <button
                       onClick={() => onDelete(d.id)}
-                      className="opacity-0 group-hover:opacity-100 text-xs text-red-500 hover:text-red-700 transition px-2 py-1"
+                      className="opacity-0 group-hover:opacity-100 text-xs text-accent-red hover:text-accent-red/80 transition px-2 py-1"
                     >
                       删除
                     </button>
@@ -143,7 +161,7 @@ export default function KnowledgePage() {
           </section>
 
           {/* 检索测试 */}
-          <section className="surface rounded-2xl p-6 shadow-soft-sm animate-slide-up" style={{ animationDelay: '150ms' }}>
+          <section className="glass-card rounded-2xl p-6 animate-slide-up" style={{ animationDelay: '150ms' }}>
             <h2 className="font-semibold mb-4">🔍 检索测试</h2>
             <div className="flex gap-2 mb-4">
               <input
@@ -152,7 +170,7 @@ export default function KnowledgePage() {
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && onQuery()}
                 placeholder="输入问题检索相关片段"
-                className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 transition text-sm"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition text-sm"
               />
               <button onClick={onQuery} disabled={!question.trim() || searching} className="btn btn-primary">
                 {searching ? '搜索中…' : '检索'}
@@ -163,10 +181,10 @@ export default function KnowledgePage() {
               <div className="space-y-2">
                 <div className="text-xs text-text-mute">{hits.length} 条命中</div>
                 {hits.map((h, i) => (
-                  <div key={i} className="p-4 rounded-lg bg-bg-soft text-sm border border-border-soft">
+                  <div key={i} className="p-4 rounded-xl bg-bg-soft text-sm border border-border-soft">
                     <div className="flex items-center justify-between mb-2 text-xs text-text-mute">
                       <span>来源：{h.source}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
+                      <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-primary/20 to-accent-purple/20 text-primary">
                         相关度 {h.score?.toFixed(3)}
                       </span>
                     </div>

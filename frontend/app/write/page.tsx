@@ -13,11 +13,11 @@ import remarkGfm from 'remark-gfm';
 import clsx from 'clsx';
 import { useUserKeys } from '@/lib/user-keys';
 
-const STYLES: Array<{ v: Style; label: string; desc: string; emoji: string }> = [
-  { v: 'blog', label: '博客', desc: '轻松、技术向', emoji: '📝' },
-  { v: 'academic', label: '学术', desc: '严谨、引证', emoji: '🎓' },
-  { v: 'report', label: '报告', desc: '数据、结论先行', emoji: '📊' },
-  { v: 'social', label: '社交', desc: '短小、抓眼球', emoji: '💬' },
+const STYLES: Array<{ v: Style; label: string; desc: string; emoji: string; gradient: string }> = [
+  { v: 'blog', label: '博客', desc: '轻松、技术向', emoji: '📝', gradient: 'glass-purple' },
+  { v: 'academic', label: '学术', desc: '严谨、引证', emoji: '🎓', gradient: 'glass-blue' },
+  { v: 'report', label: '报告', desc: '数据、结论先行', emoji: '📊', gradient: 'glass-cyan' },
+  { v: 'social', label: '社交', desc: '短小、抓眼球', emoji: '💬', gradient: 'glass-pink' },
 ];
 
 const LENGTHS: Array<{ v: Length; label: string; words: string }> = [
@@ -63,10 +63,7 @@ export default function WritePage() {
       enable_rag: enableRag,
       enable_search: enableSearch,
       collection: 'default',
-      outline: customOutline
-        .split('\n')
-        .map((s) => s.trim().replace(/^[-*\d.、\s]+/, ''))
-        .filter(Boolean),
+      outline: customOutline.split('\n').map((s) => s.trim().replace(/^[-*\d.、\s]+/, '')).filter(Boolean),
     };
     try {
       await streamWriteArticle(req, (updater) => setState((s) => updater(s)), ac.signal);
@@ -92,11 +89,8 @@ export default function WritePage() {
 
   const isRunning = state.overall === 'running';
   const completedSections = state.researchers.filter((r) => r.status === 'done').length;
-  const totalSteps = 1 + state.researchers.length + 1; // Planner + Researchers + Writer
-  const completedSteps =
-    (state.planner.status === 'done' ? 1 : 0) +
-    completedSections +
-    (state.writer.status === 'done' ? 1 : 0);
+  const totalSteps = 1 + state.researchers.length + 1;
+  const completedSteps = (state.planner.status === 'done' ? 1 : 0) + completedSections + (state.writer.status === 'done' ? 1 : 0);
   const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
   return (
@@ -104,12 +98,12 @@ export default function WritePage() {
       <Topbar />
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧：表单 */}
-        <aside className="w-80 shrink-0 border-r border-border bg-surface overflow-y-auto">
+        <aside className="w-80 shrink-0 border-r border-border bg-surface/50 backdrop-blur-md overflow-y-auto">
           <div className="p-5 space-y-5">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-2xl">✍️</span>
-                <h1 className="font-serif text-xl font-semibold">多智能体写作</h1>
+                <h1 className="font-serif text-xl font-semibold text-hero">多智能体写作</h1>
               </div>
               <p className="text-xs text-text-mute">5 个 Agent 协同：Planner → Researchers → Writer</p>
             </div>
@@ -119,7 +113,7 @@ export default function WritePage() {
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="例：RAG 技术原理与实践"
-                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 transition min-h-[70px] resize-none"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition min-h-[70px] resize-none"
               />
             </Field>
 
@@ -132,7 +126,7 @@ export default function WritePage() {
                     className={clsx(
                       'text-left text-xs px-2.5 py-2 rounded-lg border transition',
                       style === s.v
-                        ? 'border-brand-400 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200'
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
                         : 'border-border hover:bg-bg-soft'
                     )}
                   >
@@ -152,7 +146,7 @@ export default function WritePage() {
                     className={clsx(
                       'w-full text-left text-xs px-2.5 py-2 rounded-lg border transition',
                       length === l.v
-                        ? 'border-brand-400 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200'
+                        ? 'border-accent-purple bg-accent-purple/10 text-accent-purple font-medium'
                         : 'border-border hover:bg-bg-soft'
                     )}
                   >
@@ -167,7 +161,7 @@ export default function WritePage() {
                 value={currentModel}
                 onChange={(e) => useChatStore.setState({ currentModel: e.target.value })}
                 disabled={isRunning}
-                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 transition"
+                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
               >
                 {enabledModels.length === 0 && <option value="">先配置 API Key</option>}
                 {enabledModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
@@ -181,12 +175,12 @@ export default function WritePage() {
               </div>
             </Field>
 
-            <Field label="自定义大纲" hint="可选，每行一章">
+            <Field label="自定义大纲" hint="可选">
               <textarea
                 value={customOutline}
                 onChange={(e) => setCustomOutline(e.target.value)}
                 placeholder={'什么是 RAG\n核心原理\n实战案例'}
-                className="w-full text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-300 transition min-h-[60px] resize-none"
+                className="w-full text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition min-h-[60px] resize-none"
               />
             </Field>
 
@@ -194,12 +188,12 @@ export default function WritePage() {
               <button
                 onClick={start}
                 disabled={!topic.trim() || !hasAny}
-                className="w-full btn btn-primary !py-2.5 shadow-soft-sm hover:shadow-soft-md"
+                className="w-full btn btn-primary !py-2.5 font-medium"
               >
                 ✨ 开始写作
               </button>
             ) : (
-              <button onClick={stop} className="w-full btn bg-red-100 text-red-700 hover:bg-red-200 !py-2.5">
+              <button onClick={stop} className="w-full btn bg-accent-red/15 text-accent-red hover:bg-accent-red/25 !py-2.5">
                 停止生成
               </button>
             )}
@@ -208,16 +202,16 @@ export default function WritePage() {
 
         {/* 右侧：进度 + 文章 */}
         <div className="flex-1 flex flex-col bg-bg overflow-hidden">
-          {/* 顶部进度条 */}
-          <div className="border-b border-border-soft bg-surface/50 px-5 py-3">
-            <div className="flex items-center justify-between mb-2">
+          {/* 顶部进度 */}
+          <div className="border-b border-border-soft bg-surface/50 backdrop-blur-md px-5 py-3">
+            <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setActiveTab('pipeline')}
                   className={clsx(
                     'text-sm px-3 py-1 rounded-md transition',
                     activeTab === 'pipeline'
-                      ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200 font-medium'
+                      ? 'bg-primary/15 text-primary font-medium'
                       : 'text-text-soft hover:bg-bg-soft'
                   )}
                 >
@@ -229,7 +223,7 @@ export default function WritePage() {
                   className={clsx(
                     'text-sm px-3 py-1 rounded-md transition',
                     activeTab === 'article'
-                      ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200 font-medium'
+                      ? 'bg-primary/15 text-primary font-medium'
                       : 'text-text-soft hover:bg-bg-soft disabled:opacity-40'
                   )}
                 >
@@ -242,10 +236,10 @@ export default function WritePage() {
                 </button>
               )}
             </div>
-            {/* 进度条 */}
-            <div className="h-1.5 bg-bg-soft rounded-full overflow-hidden">
+            {/* 渐变进度条 */}
+            <div className="h-1.5 bg-bg-soft rounded-full overflow-hidden relative">
               <div
-                className="h-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all duration-500 ease-out"
+                className="h-full bg-aurora animate-aurora transition-all duration-500 ease-out rounded-full"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -255,7 +249,7 @@ export default function WritePage() {
                 {completedSections}/{state.researchers.length} Researcher ·{' '}
                 {state.writer.status === 'done' ? '✓' : state.writer.status === 'running' ? '⏳' : '○'} Writer
               </span>
-              <span>{Math.round(progress)}%</span>
+              <span className="font-mono">{Math.round(progress)}%</span>
             </div>
           </div>
 
@@ -264,7 +258,7 @@ export default function WritePage() {
               <div className="max-w-2xl mx-auto p-6">
                 <AgentPipeline state={state} />
                 {state.error && (
-                  <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm animate-fade-in">
+                  <div className="mt-4 p-3 rounded-lg bg-accent-red/10 text-accent-red text-sm animate-fade-in border border-accent-red/30">
                     ⚠️ {state.error}
                   </div>
                 )}
@@ -272,7 +266,7 @@ export default function WritePage() {
             ) : (
               <article className="max-w-3xl mx-auto p-6">
                 {state.writer.article ? (
-                  <div className="bg-surface rounded-2xl shadow-soft-sm border border-border p-8 md:p-10 animate-fade-in">
+                  <div className="glass-card rounded-2xl p-8 md:p-10 animate-fade-in">
                     <div className="prose prose-base max-w-none font-serif">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
                     </div>
@@ -296,7 +290,7 @@ function Field({ label, required, hint, children }: { label: string; required?: 
   return (
     <div>
       <label className="flex items-center justify-between text-xs font-semibold text-text-soft mb-1.5">
-        <span>{label} {required && <span className="text-red-500">*</span>}</span>
+        <span>{label} {required && <span className="text-accent-red">*</span>}</span>
         {hint && <span className="font-normal text-text-mute">{hint}</span>}
       </label>
       {children}
@@ -311,7 +305,7 @@ function CheckboxRow({ checked, onChange, emoji, label }: { checked: boolean; on
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="w-3.5 h-3.5 accent-brand-600 cursor-pointer"
+        className="w-3.5 h-3.5 accent-primary cursor-pointer"
       />
       <span>{emoji}</span>
       <span>{label}</span>

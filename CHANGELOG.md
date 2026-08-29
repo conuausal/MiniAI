@@ -2,51 +2,65 @@
 
 所有显著变更都会记录在此文件。版本遵循 [Semantic Versioning](https://semver.org/)。
 
-## [0.6.0] - 2026-08-30
+## [0.7.0] - 2026-08-30
 
-### ✨ Added — 语音交互
+### ✨ Added — Apple Liquid Glass 设计语言
 
-- **🎙️ 语音输入（STT）**：基于浏览器原生 `SpeechRecognition`
-  - 输入框左侧加麦克风按钮，点击开始录音
-  - 录音中浮层实时显示识别中间结果
-  - 自动停止后文字直接填入并发送（或填到输入框让你确认）
-  - 兼容 Chrome / Edge（推荐），Safari 部分支持，Firefox 不支持
-- **🔊 语音输出（TTS）**：基于浏览器原生 `SpeechSynthesis`
-  - 顶部 🔊/🔇 开关控制是否自动朗读助手回复
-  - 自动清理 Markdown 符号（`**` / `#` / 代码块）
-  - 中文音色支持，语速 1.05x
-  - 用户开始新对话时自动停掉上一段朗读
-- **零成本**：完全使用浏览器 API，无需后端 Whisper / TTS
-- **顶部双开关**：🎙️ 语音输入开关 + 🔊 语音输出开关，独立控制
+参考 Apple WWDC 2025 Liquid Glass 设计语言全面重做视觉系统：
 
-### 📝 已知限制
-
-- STT 准确率依赖浏览器（Chrome/Edge 中文识别好）
-- 不支持 Firefox STT（TTS 仍可用）
-- 首次使用需用户授权麦克风权限
-- 不适合嘈杂环境（无降噪）
+- **设计令牌完全重写**：
+  - 8 种鲜艳渐变：`bg-hero`（粉→紫→蓝）/ `bg-aurora` / `bg-sunset` / `bg-ocean` / `bg-magic`（紫）/ `bg-fire`（橙→红）等
+  - 6 种彩色玻璃卡：`.glass-pink` / `.glass-cyan` / `.glass-purple` / `.glass-orange` / `.glass-red` / `.glass-blue`，每张都自带彩色发光阴影
+  - 多层玻璃工具类：`.glass` / `.glass-strong` / `.glass-card`（hover 自动 lift+放大）
+  - 三色发光阴影：`shadow-glow-blue` / `shadow-glow-pink` / `shadow-glow-purple`
+- **Topbar 重做**：
+  - 渐变 Logo 方块 + `text-hero` 渐变文字（粉→紫→蓝）
+  - 顶栏底加 1px 渐变细线 + 8s 流动动画
+  - 顶部按钮彩色化（语音输入紫、语音输出粉、key 琥珀）
+- **主界面 Hero**：
+  - "Liquid AI / for everyone" 巨型衬线标题（带 aurora 渐变）
+  - 4 张彩色玻璃建议卡（紫/粉/青/橙），hover 上浮放大
+  - 5 个能力徽章（薄荷/紫/青/橙/粉）
+- **消息气泡**：用户消息用 `bg-hero` 渐变 + 发光阴影
+- **多智能体写作页**：
+  - 5 个 Agent 卡片每张配独立渐变色 + 图标（Planner 紫、Researcher 蓝/青/绿、Writer 粉红）
+  - 进度条用 `bg-aurora` + 8s 流动动画
+  - 表单选中态用主色 + 紫色双重强调
+- **知识库**：
+  - 拖拽区 hover 时边框变主色 + 缩放动画
+  - 文档卡 5 色循环渐变背景
+  - 相似度徽章用主→紫渐变
+- **设置页**：
+  - 3 张 StatCard 渐变背景（绿/主色紫/橙）
+  - 模型启用态用 emerald 渐变；工具卡用琥珀渐变
+- **新动画**：`animate-aurora`（8s 背景流动）/ `animate-float`（4s 浮动）
+- **噪点纹理**：`.noise` 类为玻璃增加微观质感（SVG inline data）
 
 ### 🔧 Changed
 
-- `frontend/lib/voice.ts`：新增（STT/TTS 封装 + 能力检测）
-- `frontend/lib/store.ts`：增加 `enableVoiceInput` / `enableVoiceOutput`
-- `frontend/components/VoiceInputButton.tsx`：新增（录音按钮 + 浮层）
-- `frontend/components/Topbar.tsx`：增加 🔊/🎙️ 开关按钮
-- `frontend/components/ChatWindow.tsx`：集成语音按钮 + 自动 TTS
+- `frontend/app/globals.css`：完全重写设计系统
+- `frontend/tailwind.config.js`：扩展颜色 / 字体 / 阴影
+- 所有页面组件都改用玻璃 + 渐变工具类
 
 ---
+
+## [0.6.0] - 2026-08-30
+
+### ✨ Added
+
+- 语音输入（Web SpeechRecognition）+ 语音输出（SpeechSynthesis）
 
 ## [0.5.0] - 2026-08-30
 
 ### ✨ Added
 
-- 25 个内置模型（7 个 provider）+ 自定义 OpenAI 兼容服务
+- 25 个内置模型（7 provider）+ 自定义 OpenAI 兼容服务
 
 ## [0.4.0] - 2026-08-29
 
 ### ✨ Added
 
-- 多租户 API Key + 全新 UI 设计系统 + 暗色模式
+- 多租户 API Key + UI 设计系统 v1 + 暗色模式
 
 ## [0.3.0] - 2026-08-29
 

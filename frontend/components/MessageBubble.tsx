@@ -15,16 +15,16 @@ export default function MessageBubble({ message }: Props) {
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white text-xs font-bold shadow-soft-sm">
+        <div className="w-9 h-9 shrink-0 rounded-xl bg-hero grid place-items-center text-white text-sm font-bold shadow-glow-blue">
           M
         </div>
       )}
       <div
         className={clsx(
-          'max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-soft-sm animate-fade-in',
+          'max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 animate-fade-in',
           isUser
-            ? 'bg-brand-600 text-white rounded-tr-sm'
-            : 'bg-surface border border-border rounded-tl-sm'
+            ? 'bg-hero text-white rounded-tr-sm shadow-glow-blue'
+            : 'glass-card rounded-tl-sm !bg-surface/80'
         )}
       >
         {!isUser && (
@@ -61,7 +61,7 @@ export default function MessageBubble({ message }: Props) {
         )}
       </div>
       {isUser && (
-        <div className="w-8 h-8 shrink-0 rounded-lg bg-bg-soft grid place-items-center text-text-soft text-sm shadow-soft-sm">
+        <div className="w-9 h-9 shrink-0 rounded-xl bg-glass-soft bg-bg-soft grid place-items-center text-text-soft text-sm shadow-soft-sm">
           👤
         </div>
       )}

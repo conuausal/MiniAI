@@ -3,98 +3,100 @@
 import clsx from 'clsx';
 import type { PipelineState } from '@/lib/write';
 
-const AGENT_COLORS: Record<string, string> = {
-  planner: 'border-purple-400 bg-purple-50 dark:bg-purple-900/20',
-  researcher: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20',
-  writer: 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
-};
-
 const STATUS_LABELS: Record<string, { text: string; cls: string }> = {
-  pending: { text: '等待', cls: 'bg-slate-200 text-slate-600' },
-  running: { text: '运行中', cls: 'bg-amber-200 text-amber-800 animate-pulse' },
-  done: { text: '完成', cls: 'bg-green-200 text-green-800' },
-  error: { text: '错误', cls: 'bg-red-200 text-red-800' },
+  pending: { text: '等待', cls: 'bg-surface-2 text-text-mute' },
+  running: { text: '运行中', cls: 'bg-amber-100 text-amber-700 animate-pulse-soft' },
+  done: { text: '完成', cls: 'bg-emerald-100 text-emerald-700' },
+  error: { text: '错误', cls: 'bg-rose-100 text-rose-700' },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS_LABELS[status] || STATUS_LABELS.pending;
-  return <span className={clsx('text-[10px] px-2 py-0.5 rounded-full', s.cls)}>{s.text}</span>;
+  return <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', s.cls)}>{s.text}</span>;
 }
+
+const AGENT_PALETTE = [
+  { border: 'border-l-accent-purple', glow: 'shadow-glow-purple', gradient: 'bg-magic', icon: '🧭' },
+  { border: 'border-l-accent-blue',   glow: 'shadow-glow-blue',   gradient: 'bg-ocean',  icon: '🔍' },
+  { border: 'border-l-accent-cyan',   glow: '',                   gradient: 'bg-ocean',  icon: '🔍' },
+  { border: 'border-l-accent-teal',   glow: '',                   gradient: 'bg-ocean',  icon: '🔍' },
+  { border: 'border-l-accent-pink',   glow: 'shadow-glow-pink',   gradient: 'bg-fire',   icon: '✍️' },
+];
 
 interface Props { state: PipelineState; }
 
 export default function AgentPipeline({ state }: Props) {
   return (
     <div className="space-y-3">
+      {/* Planner */}
       <AgentCard
-        icon="🧭"
+        index={0}
         role="Planner"
         desc="主编：拆解主题为大纲"
         status={state.planner.status}
-        color={AGENT_COLORS.planner}
       >
         {state.planner.outline.length > 0 ? (
-          <ul className="text-xs space-y-1">
+          <ul className="text-xs space-y-1.5">
             {state.planner.outline.map((o, i) => (
               <li key={o.section_id} className="flex gap-2">
-                <span className="font-mono text-purple-600 dark:text-purple-300 shrink-0">{i + 1}.</span>
+                <span className="font-mono text-accent-purple shrink-0 font-bold">{i + 1}.</span>
                 <div>
-                  <div className="font-medium">{o.title}</div>
-                  {o.focus && <div className="text-slate-500 dark:text-slate-400">↳ {o.focus}</div>}
+                  <div className="font-medium text-text">{o.title}</div>
+                  {o.focus && <div className="text-text-mute">↳ {o.focus}</div>}
                 </div>
               </li>
             ))}
           </ul>
         ) : state.planner.status === 'running' ? (
-          <div className="text-xs text-slate-500 animate-pulse">正在拆解主题...</div>
+          <div className="text-xs text-text-mute animate-pulse-soft">正在拆解主题...</div>
         ) : (
-          <div className="text-xs text-slate-400">等待启动</div>
+          <div className="text-xs text-text-mute">等待启动</div>
         )}
       </AgentCard>
 
-      {state.researchers.map((r) => (
+      {state.researchers.map((r, i) => (
         <AgentCard
           key={r.section_id}
-          icon="🔍"
-          role={`Researcher`}
+          index={i + 1}
+          role={`Researcher ${i + 1}`}
           desc={r.title}
           status={r.status}
-          color={AGENT_COLORS.researcher}
         >
           {r.notes ? (
             <div>
-              <pre className="text-xs whitespace-pre-wrap max-h-48 overflow-y-auto bg-white/60 dark:bg-slate-900/60 rounded p-2 border border-blue-100 dark:border-blue-900">
+              <pre className="text-xs whitespace-pre-wrap max-h-48 overflow-y-auto bg-surface/60 rounded-lg p-2.5 border border-border">
                 {r.notes}
               </pre>
               {r.sources.length > 0 && (
-                <div className="mt-1 text-[10px] text-slate-500">
+                <div className="mt-1.5 text-[10px] text-text-mute flex items-center gap-1">
                   📎 {r.sources.length} 个来源
                 </div>
               )}
             </div>
           ) : r.status === 'running' ? (
-            <div className="text-xs text-slate-500 animate-pulse">收集资料中…</div>
+            <div className="text-xs text-text-mute animate-pulse-soft">收集资料中…</div>
           ) : (
-            <div className="text-xs text-slate-400">等待启动</div>
+            <div className="text-xs text-text-mute">等待启动</div>
           )}
         </AgentCard>
       ))}
 
+      {/* Writer */}
       <AgentCard
-        icon="✍️"
+        index={AGENT_PALETTE.length - 1}
         role="Writer"
         desc="撰稿人：综合素材生成终稿"
         status={state.writer.status}
-        color={AGENT_COLORS.writer}
       >
         {state.writer.article ? (
-          <div className="text-xs text-emerald-700 dark:text-emerald-300">
-            ✅ 已生成 {state.writer.wordCount} 字的文章
+          <div className="text-xs text-accent-pink font-medium flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-accent-pink" />
+            已生成 {state.writer.wordCount} 字的文章
           </div>
         ) : state.writer.status === 'running' ? (
-          <div className="text-xs text-slate-500 animate-pulse">正在综合所有素材撰写…</div>
+          <div className="text-xs text-text-mute animate-pulse-soft">正在综合所有素材撰写…</div>
         ) : (
-          <div className="text-xs text-slate-400">等待研究人员完成</div>
+          <div className="text-xs text-text-mute">等待研究人员完成</div>
         )}
       </AgentCard>
     </div>
@@ -102,21 +104,35 @@ export default function AgentPipeline({ state }: Props) {
 }
 
 function AgentCard({
-  icon, role, desc, status, color, children,
+  index, role, desc, status, children,
 }: {
-  icon: string; role: string; desc: string; status: string; color: string; children: React.ReactNode;
+  index: number; role: string; desc: string; status: string; children: React.ReactNode;
 }) {
+  const palette = AGENT_PALETTE[index] || AGENT_PALETTE[0];
   return (
-    <div className={clsx('border-l-4 rounded-r-lg p-3', color)}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span>{icon}</span>
-          <span className="font-semibold text-sm">{role}</span>
-          <span className="text-xs text-slate-500">· {desc}</span>
+    <div className={clsx(
+      'glass-card border-l-4 overflow-hidden',
+      palette.border,
+      status === 'running' && palette.glow
+    )}>
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className={clsx(
+              'w-8 h-8 rounded-lg grid place-items-center text-white text-sm shadow-soft-sm',
+              palette.gradient
+            )}>
+              {palette.icon}
+            </div>
+            <div>
+              <div className="font-semibold text-sm text-text">{role}</div>
+              <div className="text-[11px] text-text-mute">{desc}</div>
+            </div>
+          </div>
+          <StatusBadge status={status} />
         </div>
-        <StatusBadge status={status} />
+        {children}
       </div>
-      {children}
     </div>
   );
 }

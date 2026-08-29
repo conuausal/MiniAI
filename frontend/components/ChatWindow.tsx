@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/lib/store';
@@ -11,10 +11,10 @@ import { useUserKeys } from '@/lib/user-keys';
 import { speak, stopSpeaking, getVoiceCapability } from '@/lib/voice';
 
 const SUGGESTIONS = [
-  { emoji: '💡', title: '解释一个概念', prompt: '用通俗的话解释一下 Transformer 架构' },
-  { emoji: '✍️', title: '帮我写文案', prompt: '帮我为新产品写一段小红书种草文' },
-  { emoji: '🔧', title: '启用工具', prompt: '现在几点了？顺便算一下 (123+456)*7' },
-  { emoji: '🌐', title: '查最新资讯', prompt: '帮我搜一下今天 AI 领域有什么重要新闻' },
+  { emoji: '💡', title: '解释一个概念', prompt: '用通俗的话解释一下 Transformer 架构', color: 'glass-purple', glow: 'shadow-glow-purple' },
+  { emoji: '✍️', title: '帮我写文案', prompt: '帮我为新产品写一段小红书种草文', color: 'glass-pink', glow: 'shadow-glow-pink' },
+  { emoji: '🔧', title: '启用工具', prompt: '现在几点了？顺便算一下 (123+456)*7', color: 'glass-cyan', glow: '' },
+  { emoji: '🌐', title: '查最新资讯', prompt: '帮我搜一下今天 AI 领域有什么重要新闻', color: 'glass-orange', glow: '' },
 ];
 
 export default function ChatWindow() {
@@ -37,7 +37,6 @@ export default function ChatWindow() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, toolRecords]);
 
-  // 自动撑高 textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -45,7 +44,6 @@ export default function ChatWindow() {
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
   }, [input]);
 
-  // 当某条 assistant 消息结束时，自动朗读（如果开启）
   useEffect(() => {
     if (!enableVoiceOutput || !ttsSupported) return;
     const last = messages[messages.length - 1];
@@ -53,7 +51,6 @@ export default function ChatWindow() {
     if (streaming) return;
     if (lastSpokenIdxRef.current === messages.length - 1) return;
     lastSpokenIdxRef.current = messages.length - 1;
-    // 把 markdown 简单清理掉再朗读（去掉 `**` `#` 等符号）
     const cleaned = last.content
       .replace(/```[\s\S]*?```/g, '代码块已省略')
       .replace(/[*_`#>]/g, '')
@@ -72,7 +69,7 @@ export default function ChatWindow() {
     const text = (override ?? input).trim();
     if (!text || streaming) return;
     setInput('');
-    stopSpeaking(); // 用户开始新对话时停掉上一段朗读
+    stopSpeaking();
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     appendMessage(userMsg);
@@ -155,15 +152,13 @@ export default function ChatWindow() {
 
   return (
     <main className="flex-1 flex flex-col bg-bg overflow-hidden">
-      {/* 头部选择器条 */}
-      <div className="px-6 py-3 border-b border-border-soft flex items-center justify-between bg-surface/50">
+      <div className="px-6 py-3 border-b border-border-soft flex items-center justify-between bg-surface/30 backdrop-blur-sm">
         <div className="flex items-center gap-2 text-sm text-text-soft">
-          <span className="text-text-mute">模型</span>
+          <span className="text-text-mute">对话</span>
         </div>
         <ModelSelector />
       </div>
 
-      {/* 消息区 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <WelcomeScreen hasKey={hasAny} onPick={(t) => send(t)} />
@@ -182,9 +177,9 @@ export default function ChatWindow() {
             {streaming && messages[messages.length - 1]?.content === '' && (
               <div className="flex items-center gap-2 text-xs text-text-mute animate-fade-in pl-1">
                 <span className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-blink" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-blink" style={{ animationDelay: '200ms' }} />
-                  <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-blink" style={{ animationDelay: '400ms' }} />
+                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-blink" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-accent-purple rounded-full animate-blink" style={{ animationDelay: '200ms' }} />
+                  <span className="w-1.5 h-1.5 bg-accent-pink rounded-full animate-blink" style={{ animationDelay: '400ms' }} />
                 </span>
                 MiniAI 正在思考…
               </div>
@@ -193,10 +188,9 @@ export default function ChatWindow() {
         )}
       </div>
 
-      {/* 输入区 */}
-      <div className="border-t border-border-soft bg-surface/80 backdrop-blur-md">
+      <div className="border-t border-border-soft bg-surface/40 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-6 py-4">
-          <div className="relative surface rounded-2xl shadow-soft-sm focus-within:shadow-soft-md focus-within:border-brand-400 transition-all">
+          <div className="relative glass rounded-2xl focus-within:shadow-soft-md focus-within:border-primary/50 transition-all">
             <textarea
               ref={textareaRef}
               value={input}
@@ -217,7 +211,7 @@ export default function ChatWindow() {
             </div>
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
               {streaming ? (
-                <button onClick={stop} className="btn bg-red-100 text-red-700 hover:bg-red-200 !py-1.5 !px-3 text-xs">
+                <button onClick={stop} className="btn bg-accent-red/15 text-accent-red hover:bg-accent-red/25 !py-1.5 !px-3 text-xs">
                   停止
                 </button>
               ) : (
@@ -245,45 +239,83 @@ export default function ChatWindow() {
 
 function WelcomeScreen({ hasKey, onPick }: { hasKey: boolean; onPick: (t: string) => void }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center px-6 animate-slide-up">
-      <div className="max-w-2xl text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-200 text-xs font-medium">
-          <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse-soft" />
-          开源 · 隐私友好 · 可自部署 · 支持语音
+    <div className="h-full flex flex-col items-center justify-center px-6 py-12 animate-slide-up">
+      <div className="max-w-3xl w-full text-center">
+        {/* 顶部标签 */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 mb-8 rounded-full bg-surface/60 backdrop-blur-md border border-border text-text-soft text-xs font-medium shadow-soft-xs">
+          <span className="w-1.5 h-1.5 bg-accent-pink rounded-full animate-pulse-soft" />
+          开源 · 隐私优先 · 25+ 模型 · 语音对话
         </div>
-        <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight mb-3">
-          你好，我是 <span className="text-brand-600 dark:text-brand-400">MiniAI</span>
+
+        {/* 大衬线标题 */}
+        <h1 className="font-serif text-5xl md:text-7xl font-semibold tracking-tight mb-3">
+          <span className="text-hero animate-aurora">Liquid AI</span>
+          <br />
+          <span className="text-text">for everyone</span>
         </h1>
-        <p className="text-text-soft text-base md:text-lg max-w-lg mx-auto mb-10">
-          多模型 · RAG 知识库 · 联网搜索 · 工具调用 · 多智能体写作 · <span className="text-brand-600 dark:text-brand-400">语音对话</span>
+
+        <p className="text-text-soft text-base md:text-lg max-w-xl mx-auto mb-10 leading-relaxed">
+          多模型 · RAG 知识库 · 联网搜索 · 工具调用 · 多智能体写作 · 语音对话
+          <br />
+          <span className="text-text-mute text-sm">把 AI 装进你自己的浏览器</span>
         </p>
 
         {!hasKey && (
-          <div className="mb-8 inline-flex items-start gap-3 px-5 py-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-left">
-            <span className="text-xl mt-0.5">🔑</span>
+          <div className="mb-8 inline-flex items-start gap-3 px-5 py-4 rounded-2xl glass border-amber-200/60 dark:border-amber-800/60 text-left">
+            <span className="text-2xl mt-0.5">🔑</span>
             <div>
               <div className="font-medium text-amber-900 dark:text-amber-100">开始之前，请先配置 API Key</div>
               <div className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                点击右上角 🔑 按钮，填入至少一个模型提供商的 Key（推荐 DeepSeek，性价比高）。
-                你的 Key 只保存在本机浏览器，不会上传到任何服务器。
+                点击右上角 🔑 按钮填入至少一个模型 Key。
+                <span className="font-medium">你的 Key 只保存在本机浏览器</span>，不上传到任何服务器。
               </div>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto">
-          {SUGGESTIONS.map((s) => (
+        {/* 4 张彩色玻璃卡片 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          {SUGGESTIONS.map((s, i) => (
             <button
               key={s.title}
               onClick={() => hasKey && onPick(s.prompt)}
               disabled={!hasKey}
-              className="group text-left p-4 surface rounded-xl hover:border-brand-300 hover:shadow-soft-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ animationDelay: `${i * 80}ms` }}
+              className={`group text-left p-5 ${s.color} ${s.glow} rounded-2xl border-0 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0 animate-slide-up overflow-hidden relative`}
             >
-              <div className="text-2xl mb-2">{s.emoji}</div>
-              <div className="text-sm font-medium mb-1">{s.title}</div>
-              <div className="text-xs text-text-mute group-hover:text-text-soft transition">{s.prompt}</div>
+              {/* 装饰光斑 */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+              <div className="relative">
+                <div className="text-3xl mb-3 drop-shadow-lg">{s.emoji}</div>
+                <div className="font-semibold mb-1 text-white text-base">{s.title}</div>
+                <div className="text-xs text-white/80 leading-relaxed">{s.prompt}</div>
+              </div>
             </button>
           ))}
+        </div>
+
+        {/* 底部展示区 */}
+        <div className="mt-12 flex items-center justify-center gap-6 text-[11px] text-text-mute">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-accent-mint rounded-full" />
+            25+ 模型
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-accent-purple rounded-full" />
+            Function Calling
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-accent-cyan rounded-full" />
+            RAG 知识库
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-accent-orange rounded-full" />
+            多智能体写作
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-accent-pink rounded-full" />
+            语音对话
+          </span>
         </div>
       </div>
     </div>
