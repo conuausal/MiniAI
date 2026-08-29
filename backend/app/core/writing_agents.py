@@ -106,6 +106,7 @@ async def planner_agent(
     *,
     model: str = "deepseek-chat",
     user_keys: Optional[dict] = None,
+    custom_providers: Optional[dict] = None,
 ) -> List[OutlineItem]:
     """Planner：拆解主题为大纲。"""
     style_desc = STYLE_GUIDES.get(style, STYLE_GUIDES["blog"])
@@ -132,6 +133,7 @@ async def planner_agent(
         temperature=0.6,
         max_tokens=1500,
         user_keys=user_keys,
+        custom_providers=custom_providers,
     )
     raw = result["text"] if isinstance(result, dict) else result
     return _parse_outline(raw, fallback_topic=topic, length=length)
@@ -201,6 +203,7 @@ async def researcher_agent(
     enable_search: bool,
     collection: str = "default",
     user_keys: Optional[dict] = None,
+    custom_providers: Optional[dict] = None,
 ) -> SectionDraft:
     """Researcher：为单个章节收集素材。"""
     # 1) 收集素材：RAG + 联网
@@ -255,6 +258,7 @@ async def researcher_agent(
         temperature=0.4,
         max_tokens=1500,
         user_keys=user_keys,
+        custom_providers=custom_providers,
     )
     notes = result["text"] if isinstance(result, dict) else result
 
@@ -289,6 +293,7 @@ async def writer_agent(
     *,
     model: str,
     user_keys: Optional[dict] = None,
+    custom_providers: Optional[dict] = None,
 ) -> str:
     """Writer：综合所有章节素材，输出最终文章。"""
     style_desc = STYLE_GUIDES.get(style, STYLE_GUIDES["blog"])
@@ -336,6 +341,7 @@ async def writer_agent(
         temperature=0.7,
         max_tokens=4000,
         user_keys=user_keys,
+        custom_providers=custom_providers,
     )
     article = result["text"] if isinstance(result, dict) else result
     return article
@@ -354,8 +360,9 @@ async def run_writing_pipeline(
     enable_search: bool = False,
     collection: str = "default",
     user_keys: Optional[dict] = None,
+    custom_providers: Optional[dict] = None,
     emit: Optional[AsyncIterator] = None,
-    send: Optional[callable] = None,  # 兼容旧接口
+    send: Optional[callable] = None,
 ) -> WritingResult:
     """完整的多智能体写作流水线。
 
@@ -367,7 +374,8 @@ async def run_writing_pipeline(
         send({"event": "planner_start", "topic": topic, "style": style, "length": length})
     outline = await planner_agent(
         topic=topic, style=style, length=length,
-        custom_outline=custom_outline, model=model, user_keys=user_keys,
+        custom_outline=custom_outline, model=model,
+        user_keys=user_keys, custom_providers=custom_providers,
     )
     if send:
         send({
@@ -382,7 +390,7 @@ async def run_writing_pipeline(
         researcher_agent(
             item=item, topic=topic, model=model,
             enable_rag=enable_rag, enable_search=enable_search, collection=collection,
-            user_keys=user_keys,
+            user_keys=user_keys, custom_providers=custom_providers,
         )
         for item in outline
     ]
@@ -401,7 +409,8 @@ async def run_writing_pipeline(
         send({"event": "writer_start"})
     article_md = await writer_agent(
         topic=topic, style=style, length=length,
-        outline=outline, sections=sections, model=model, user_keys=user_keys,
+        outline=outline, sections=sections, model=model,
+        user_keys=user_keys, custom_providers=custom_providers,
     )
     if send:
         send({"event": "writer_done", "article": article_md, "word_count": len(article_md)})

@@ -1,4 +1,4 @@
-"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
+﻿"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_once, parse_user_keys, stream_chat
+from app.core.llm import chat_once, parse_custom_providers, parse_user_keys, stream_chat
 from app.core.memory import MemoryStore
 from app.core.rag import rag_engine
 from app.core.tools import execute_tool, list_tools
@@ -39,6 +39,11 @@ MAX_TOOL_ROUNDS = 3
 def get_user_keys(x_user_api_keys: Optional[str] = Header(default=None)) -> dict:
     """FastAPI Depends：从请求头读取用户 API Keys。"""
     return parse_user_keys(x_user_api_keys)
+
+
+def get_custom_providers(x_user_custom_providers: Optional[str] = Header(default=None)) -> dict:
+    """FastAPI Depends：从请求头读取用户自定义 provider。"""
+    return parse_custom_providers(x_user_custom_providers)
 
 
 async def _ensure_session(db: AsyncSession, req: ChatRequest) -> tuple[MemoryStore, str]:
@@ -97,6 +102,7 @@ async def chat_completions(
     req: ChatRequest,
     db: AsyncSession = Depends(get_session),
     user_keys: dict = Depends(get_user_keys),
+    custom_providers: dict = Depends(get_custom_providers),
 ) -> StreamingResponse | dict:
     """主入口：流式 SSE 输出（含 function calling 自动循环）。"""
     store, session_id = await _ensure_session(db, req)
@@ -119,6 +125,7 @@ async def chat_completions(
             max_tokens=req.max_tokens,
             max_rounds=MAX_TOOL_ROUNDS,
             user_keys=user_keys,
+            custom_providers=custom_providers,
         )
         await store.append_message(session_id, "assistant", text)
         return {"session_id": session_id, "content": text}
@@ -141,6 +148,7 @@ async def chat_completions(
                     max_tokens=req.max_tokens,
                     tools=tools_schema,
                     user_keys=user_keys,
+                    custom_providers=custom_providers,
                 ):
                     if "<<<TOOL_CALLS>>>" in delta:
                         before, _, after = delta.partition("<<<TOOL_CALLS>>>")
@@ -204,13 +212,15 @@ async def _run_with_tools(
     max_tokens: int,
     max_rounds: int,
     user_keys: dict,
+    custom_providers: dict,
 ) -> tuple[str, list[dict]]:
     current = list(messages)
     all_records: list[dict] = []
     for _round in range(max_rounds):
         result = await chat_once(
             model=model, messages=current, temperature=temperature,
-            max_tokens=max_tokens, tools=tools, user_keys=user_keys,
+            max_tokens=max_tokens, tools=tools,
+            user_keys=user_keys, custom_providers=custom_providers,
         )
         if not result["tool_calls"]:
             return result["text"], all_records
@@ -236,7 +246,7 @@ async def _run_with_tools(
             "tool_calls": result["tool_calls"],
         })
         current.extend(tool_msgs)
-    final = await chat_once(model=model, messages=current, temperature=temperature, max_tokens=max_tokens, user_keys=user_keys)
+    final = await chat_once(model=model, messages=current, temperature=temperature, max_tokens=max_tokens, user_keys=user_keys, custom_providers=custom_providers)
     return final["text"], all_records
 
 

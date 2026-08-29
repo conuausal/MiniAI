@@ -2,55 +2,68 @@
 
 所有显著变更都会记录在此文件。版本遵循 [Semantic Versioning](https://semver.org/)。
 
-## [0.4.0] - 2026-08-29
+## [0.5.0] - 2026-08-30
 
-### ✨ Added — 多租户 SaaS 化
+### ✨ Added — 模型大幅扩充
 
-- **用户级 API Key 管理**：
-  - 前端 `🔑` 抽屉：可视化配置 DeepSeek / OpenAI / 智谱 三家 provider
-  - Key 存储到浏览器 `localStorage`（仅本机，不上传服务器）
-  - `fetch` 拦截器自动注入 `X-User-API-Keys: {"deepseek":"sk-..."}` header
-  - 后端从 header 解析 → 合并 `.env` 兜底 → 仅本次请求生效（不污染全局）
-  - 每用户独立 API 配额、独立隐私（部署到公网时多租户天然隔离）
-- **全新 UI 系统**（向大众审美靠拢）：
-  - 设计令牌系统：CSS 变量 + 暗色模式（localStorage 持久化 + 系统偏好）
-  - 顶部导航 `Topbar`：玻璃拟态 + Logo + 导航 + 主题切换 + Key 入口 + GitHub
-  - 主界面欢迎屏：衬线大标题 + 4 张提示卡片（呼应 ChatGPT / Notion 风格）
-  - 消息气泡：左右双头像、圆角 + 阴影、代码高亮自定义
-  - 输入框：自适应高度、focus 阴影增强
-  - 多智能体写作：横向进度条 + 状态指示（O/⏳/✓）+ 字体用衬线（更文章感）
-  - 知识库：拖拽上传区 + 状态徽章 + 命中相似度徽章
-  - 设置页：3 张状态卡片 + 模型分组（已启用 / 未配置）+ 工具清单
+- **内置 25 个模型，覆盖 7 个 provider**：
+  - 🐋 DeepSeek (3)：V3 / R1 / Coder-V2
+  - 🧠 OpenAI (6)：GPT-4o / 4o-mini / 4-Turbo / 3.5-Turbo / o1 / o1-mini
+  - 🤖 **MiniMax (3)：M3 / Text-01 / abab6.5s**  ← 新增
+  - 🀄 智谱 GLM (3)：4-Plus / 4-Flash (免费) / 4-Long
+  - 🌙 Moonshot Kimi (3)：128K / 32K / 8K
+  - ☁️ 通义千问 Qwen (4)：Max / Plus / Turbo / Long
+  - 💎 Google Gemini (3)：1.5 Pro / 1.5 Flash / 2.0 Flash Exp
+- **自定义 OpenAI 兼容服务**：
+  - 用户可在 🔑 抽屉里添加任意 provider（Ollama / One-API / OpenRouter / 公司内网代理…）
+  - 填：Base URL + API Key + 模型列表
+  - 存 localStorage，请求时通过 `X-User-Custom-Providers` header 传给后端
+  - 后端在生成 client 时合并内置 + 自定义 provider
+- **模型标签系统**：每个模型有 tags（推荐 / 推理 / 代码 / 快速 / 经济 / 中文 / 长文本 / 多模态 / 免费 / 最新），前端 ModelSelector 按标签显示彩色徽章
+- **ModelSelector 重做**：
+  - 按 provider 分组下拉（替代原来扁平 select）
+  - 当前模型显示 emoji + label
+  - 标签彩色徽章
+  - 已启用 / 未配置 分两段
+
+### 📝 Notes on "DeepSeek V4"
+
+- 截至 v0.5.0 发布，DeepSeek 没有官方 V4 公开模型
+- 我们用真实存在的 **DeepSeek-V3** + **R1** + **Coder-V2** 替代
+- 当 DeepSeek 发布 V4 时，只需在 `backend/app/core/llm.py` 的 `MODEL_REGISTRY` 加一行即可
 
 ### 🔧 Changed
 
-- `backend/app/core/llm.py`：拆出 `parse_user_keys()` / `get_effective_keys()`，所有 client 构造都接受 `user_keys` 参数
-- `backend/app/api/chat.py` / `write.py` / `models.py`：通过 `Depends(get_user_keys)` 从 header 读取
-- `backend/app/core/writing_agents.py`：4 个 Agent / pipeline 都透传 `user_keys`
-- `frontend/lib/user-keys.ts`：新增，含 `useUserKeys` hook + `patchFetchWithUserKeys()`
-- `frontend/lib/theme.ts`：新增，含 `useDarkMode` hook
-- `frontend/components/ApiKeyDrawer.tsx`：新增，右滑抽屉
-- `frontend/components/Topbar.tsx`：新增
-- `frontend/app/layout.tsx`：注入主题脚本（避免暗色模式闪烁）
-- `frontend/tailwind.config.js` / `app/globals.css`：完全重写设计系统
+- `backend/app/config.py`：扩展支持 7 个 provider 的 env key
+- `backend/.env.example`：列出所有 provider 的环境变量
+- `backend/app/models/schemas.py`：`ModelInfo` 增加 `tags: List[str]`
+- `frontend/lib/user-keys.ts`：重写，支持自定义 provider + fetch 拦截器注入两个 header
+- `frontend/components/ApiKeyDrawer.tsx`：增加自定义服务编辑器弹窗
+- `frontend/components/ModelSelector.tsx`：完全重写为分组下拉
 
 ---
+
+## [0.4.0] - 2026-08-29
+
+### ✨ Added
+
+- 多租户 API Key（用户在前端填自己的 Key，存 localStorage）
+- 全新 UI 设计系统 + 暗色模式
 
 ## [0.3.0] - 2026-08-29
 
 ### ✨ Added
 
-- 🤖 多智能体写作（Planner → Researchers → Writer）
-- 8 种 SSE 事件流式可视化
+- 多智能体写作（Planner → Researchers → Writer）
 
 ## [0.2.0] - 2026-08-29
 
 ### ✨ Added
 
-- 🛠 Function Calling（5 个内置工具）
+- Function Calling（5 个内置工具）
 
 ## [0.1.0] - 2026-08-29
 
 ### ✨ Added
 
-- 🎉 MVP：多模型 + RAG + 联网搜索 + 对话记忆 + 流式输出 + Docker 一键部署
+- MVP：多模型 + RAG + 联网搜索 + 对话记忆 + 流式输出 + Docker

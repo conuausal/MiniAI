@@ -1,4 +1,4 @@
-"""Pydantic 请求/响应 schema。"""
+﻿"""Pydantic 请求/响应 schema。"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,6 +14,7 @@ class ModelInfo(BaseModel):
     label: str
     provider: str
     enabled: bool
+    tags: List[str] = []
 
 
 class ModelListResponse(BaseModel):

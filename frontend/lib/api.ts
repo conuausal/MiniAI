@@ -1,4 +1,4 @@
-/** 与后端交互的客户端封装。 */
+﻿/** 与后端交互的客户端封装。 */
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
@@ -12,7 +12,7 @@ export interface ChatMessage {
   tool_call_id?: string | null;
 }
 
-export interface ModelInfo { id: string; label: string; provider: string; enabled: boolean; }
+export interface ModelInfo { id: string; label: string; provider: string; enabled: boolean; tags?: string[]; }
 
 export interface SessionInfo {
   id: string; title: string; model: string;

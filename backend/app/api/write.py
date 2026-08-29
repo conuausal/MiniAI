@@ -1,4 +1,4 @@
-"""多智能体写作 API：以 SSE 流式推送 Planner → Researchers → Writer 的每个阶段进度。"""
+﻿"""多智能体写作 API：以 SSE 流式推送 Planner → Researchers → Writer 的每个阶段进度。"""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +9,7 @@ from typing import AsyncIterator, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.core.llm import parse_user_keys
+from app.core.llm import parse_custom_providers, parse_user_keys
 from app.core.writing_agents import OutlineItem, run_writing_pipeline
 from app.models.schemas import WriteRequest
 
@@ -27,10 +27,15 @@ def get_user_keys(x_user_api_keys: Optional[str] = Header(default=None)) -> dict
     return parse_user_keys(x_user_api_keys)
 
 
+def get_custom_providers(x_user_custom_providers: Optional[str] = Header(default=None)) -> dict:
+    return parse_custom_providers(x_user_custom_providers)
+
+
 @router.post("/article")
 async def write_article(
     req: WriteRequest,
     user_keys: dict = Depends(get_user_keys),
+    custom_providers: dict = Depends(get_custom_providers),
 ) -> StreamingResponse:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
@@ -60,6 +65,7 @@ async def write_article(
                     enable_search=req.enable_search,
                     collection=req.collection,
                     user_keys=user_keys,
+                    custom_providers=custom_providers,
                     send=emit,
                 )
                 emit({"event": "done"})
@@ -93,6 +99,7 @@ async def get_writing_task(task_id: str) -> dict:
 async def write_article_sync(
     req: WriteRequest,
     user_keys: dict = Depends(get_user_keys),
+    custom_providers: dict = Depends(get_custom_providers),
 ) -> dict:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
@@ -112,6 +119,7 @@ async def write_article_sync(
         enable_search=req.enable_search,
         collection=req.collection,
         user_keys=user_keys,
+        custom_providers=custom_providers,
         send=collect,
     )
 
