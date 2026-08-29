@@ -7,6 +7,7 @@ import { useUserKeys } from '@/lib/user-keys';
 import { useChatStore } from '@/lib/store';
 import { useDarkMode } from '@/lib/theme';
 import ApiKeyDrawer from './ApiKeyDrawer';
+import ModelSelector from './ModelSelector';
 
 export default function Topbar() {
   const pathname = usePathname();
@@ -14,6 +15,9 @@ export default function Topbar() {
   const { enableVoiceOutput, setEnableVoiceOutput, enableVoiceInput, setEnableVoiceInput } = useChatStore();
   const { isDark, toggle } = useDarkMode();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // 仅在对话页（/）显示模型选择器
+  const showModelSelector = pathname === '/';
 
   const navItems = [
     { href: '/', label: '对话', emoji: '💬' },
@@ -23,14 +27,15 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30">
-        <div className="glass-strong h-14 px-5 flex items-center justify-between">
-          <div className="flex items-center gap-8">
+      <header className="sticky top-0 z-40">
+        <div className="glass-strong h-14 px-4 flex items-center gap-4">
+          {/* 左：Logo + 导航 */}
+          <div className="flex items-center gap-6 shrink-0">
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-8 h-8 rounded-xl bg-hero grid place-items-center text-white font-bold shadow-glow-blue group-hover:scale-110 transition-transform">
                 M
               </div>
-              <span className="font-serif font-semibold text-base tracking-tight text-hero">
+              <span className="font-serif font-semibold text-base tracking-tight text-hero hidden sm:inline">
                 MiniAI
               </span>
             </Link>
@@ -56,7 +61,16 @@ export default function Topbar() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {/* 中：模型选择器（仅对话页） */}
+          {showModelSelector && (
+            <div className="flex-1 flex justify-center min-w-0">
+              <ModelSelector />
+            </div>
+          )}
+          {!showModelSelector && <div className="flex-1" />}
+
+          {/* 右：功能按钮 */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <IconButton
               active={enableVoiceOutput}
               onClick={() => setEnableVoiceOutput(!enableVoiceOutput)}
@@ -91,7 +105,6 @@ export default function Topbar() {
             </a>
           </div>
         </div>
-        {/* 顶部细线渐变 */}
         <div className="gradient-line" />
       </header>
       <ApiKeyDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />

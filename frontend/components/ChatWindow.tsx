@@ -1,10 +1,9 @@
-'use client';
+﻿﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/lib/store';
 import { streamChat, ChatMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
-import ModelSelector from './ModelSelector';
 import ToolCallCard from './ToolCallCard';
 import VoiceInputButton from './VoiceInputButton';
 import { useUserKeys } from '@/lib/user-keys';
@@ -152,13 +151,6 @@ export default function ChatWindow() {
 
   return (
     <main className="flex-1 flex flex-col bg-bg overflow-hidden">
-      <div className="px-6 py-3 border-b border-border-soft flex items-center justify-between bg-surface/30 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-sm text-text-soft">
-          <span className="text-text-mute">对话</span>
-        </div>
-        <ModelSelector />
-      </div>
-
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <WelcomeScreen hasKey={hasAny} onPick={(t) => send(t)} />
