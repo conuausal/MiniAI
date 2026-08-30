@@ -124,7 +124,10 @@ export async function streamWriteArticle(
       try {
         const payload = JSON.parse(dataLines.join('\n'));
         handleEvent(payload, update);
-      } catch { /* ignore */ }
+      } catch (e) {
+        // 不再静默吞错：任何事件处理异常都浮出来，避免"卡在 0% 无反馈"
+        update((s) => ({ ...s, overall: 'error', error: `事件处理失败: ${String(e)}` }));
+      }
     }
   }
 }
