@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.llm import chat_once, parse_custom_providers, parse_user_keys, stream_chat
 from app.core.memory import MemoryStore
+from app.core.memory_window import get_window, push_window
 from app.core.rag import rag_engine
 from app.core.tools import execute_tool, list_tools
 from app.core.web_search import format_for_prompt, web_search
@@ -66,9 +68,20 @@ async def _build_initial_messages(
     session_id: str,
     req: ChatRequest,
 ) -> list[dict]:
-    """构造发给 LLM 的完整 messages：记忆 + RAG + 联网。"""
-    history = await store.to_chat_history(session_id, system_prompt=SYSTEM_PROMPT)
+    """构造发给 LLM 的完整 messages：N 轮记忆窗口 + RAG + 联网。
 
+    记忆窗口优先从 Redis 读取（滑动窗口，最近 N 轮）；
+    Redis 未命中或不可用时回退到 MySQL 最近 N 轮。
+    """
+    # 1) 记忆窗口（不含 system）
+    window = await get_window(session_id)
+    if window is None:
+        full = await store.to_chat_history(session_id, system_prompt=None)
+        cap = max(1, int(settings.memory_window_rounds)) * 2
+        window = full[-cap:] if full else []
+    history: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(window)
+
+    # 2) RAG / 联网增强最后一条 user 消息
     last_user = next((m for m in reversed(req.messages) if m.role == "user"), None)
     extra_context_blocks: list[str] = []
 
@@ -87,10 +100,13 @@ async def _build_initial_messages(
 
     if extra_context_blocks:
         augmented = last_user.content + "\n\n---\n" + "\n\n".join(extra_context_blocks)
+        target = None
         for i in range(len(history) - 1, -1, -1):
             if history[i]["role"] == "user":
-                history[i]["content"] = augmented
+                target = i
                 break
+        if target is not None:
+            history[target] = {**history[target], "content": augmented}
         else:
             history.append({"role": "user", "content": augmented})
 
@@ -109,7 +125,9 @@ async def chat_completions(
 
     user_msgs = [m for m in req.messages if m.role == "user"]
     if user_msgs:
-        await store.append_message(session_id, "user", user_msgs[-1].content)
+        last_user_text = user_msgs[-1].content
+        await store.append_message(session_id, "user", last_user_text)
+        await push_window(session_id, "user", last_user_text)
 
     full_messages = await _build_initial_messages(store, session_id, req)
     tools_schema = list_tools() if req.enable_tools else None
@@ -128,6 +146,7 @@ async def chat_completions(
             custom_providers=custom_providers,
         )
         await store.append_message(session_id, "assistant", text)
+        await push_window(session_id, "assistant", text)
         return {"session_id": session_id, "content": text}
 
     async def event_gen() -> AsyncIterator[str]:
@@ -194,6 +213,7 @@ async def chat_completions(
 
             final = "".join(assistant_buf)
             await store.append_message(session_id, "assistant", final)
+            await push_window(session_id, "assistant", final)
             yield f"event: done\ndata: {json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"

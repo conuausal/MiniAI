@@ -19,10 +19,22 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_secret_key: str = "change-me"
 
-    database_url: str = "sqlite+aiosqlite:///./data/miniai.db"
+    database_url: str = "mysql+aiomysql://miniai:miniai@localhost:3307/miniai"
 
     vector_store_dir: str = "./data/vector_store"
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
+
+    # ===== Redis 对话记忆窗口 =====
+    redis_url: str = "redis://localhost:6379/0"
+    memory_window_rounds: int = 20  # 保留最近 N 轮对话
+
+    # ===== RAG 重排序 =====
+    # 默认 bge-reranker-v2-m3（国内镜像可达）；若要用 GTE 系列改 RERANK_MODEL 即可
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    hf_endpoint: str = ""  # 国内可填 https://hf-mirror.com 加速模型下载
+
+    # ===== 随机二次元 =====
+    random_anime_api: str = "https://api.elaina.cat/random/"
 
     # ===== 多 provider API Keys（用户也可在前端 🔑 配置） =====
     # DeepSeek

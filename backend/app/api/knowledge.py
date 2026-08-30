@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -65,20 +67,32 @@ async def upload_document(
 @router.get("/documents", response_model=list[KnowledgeDocInfo])
 async def list_documents(collection: str = "default", db: AsyncSession = Depends(get_session)) -> list[KnowledgeDocInfo]:
     rows = await rag_engine.list_documents(collection=collection)
+    # DB 记录是 created_at 的权威来源（上传时写入），Chroma 元数据作兜底
+    result = await db.execute(select(KnowledgeDoc))
+    db_created = {rec.id: rec.created_at for rec in result.scalars()}
+    now = datetime.utcnow()
     return [
         KnowledgeDocInfo(
             id=r["doc_id"], name=r["source"], source=r["source"],
-            chunks=r["chunks"], collection=r["collection"], created_at=__import__("datetime").datetime.utcnow(),
+            chunks=r["chunks"], collection=r["collection"],
+            created_at=db_created.get(r["doc_id"]) or now,
         )
         for r in rows
     ]
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str, collection: str = "default") -> dict:
+async def delete_document(
+    doc_id: str,
+    collection: str = "default",
+    db: AsyncSession = Depends(get_session),
+) -> dict:
     ok = await rag_engine.delete_document(doc_id, collection=collection)
     if not ok:
         raise HTTPException(status_code=404, detail="文档不存在")
+    # 同步删除 DB 记录，避免 DB 与向量库漂移
+    await db.execute(delete(KnowledgeDoc).where(KnowledgeDoc.id == doc_id))
+    await db.commit()
     return {"deleted": doc_id}
 
 

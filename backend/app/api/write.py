@@ -17,6 +17,14 @@ router = APIRouter()
 
 
 _PROGRESS_STORE: Dict[str, List[dict]] = {}
+# 防止无界增长：最多保留最近 MAX_TASKS 个任务的事件，更早的淘汰
+MAX_TASKS = 100
+
+
+def _evict_stale_tasks() -> None:
+    """超出容量时淘汰最早的任务，避免内存泄漏。"""
+    while len(_PROGRESS_STORE) > MAX_TASKS:
+        _PROGRESS_STORE.pop(next(iter(_PROGRESS_STORE)), None)
 
 
 def _sse(data: dict) -> str:
@@ -50,6 +58,7 @@ async def write_article(
             payload_with_id = {**payload, "task_id": task_id}
             queue.put_nowait(payload_with_id)
             _PROGRESS_STORE.setdefault(task_id, []).append(payload)
+            _evict_stale_tasks()
 
         yield _sse({"event": "start", "task_id": task_id, "topic": req.topic})
 

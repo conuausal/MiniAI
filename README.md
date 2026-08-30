@@ -73,7 +73,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/<your-username>/MiniAI.git
+git clone https://github.com/conuausal/MiniAI.git
 cd MiniAI
 
 # 2. 配置 API Key
@@ -212,7 +212,7 @@ MODEL_REGISTRY["my-model"] = {
 - [ ] 移动端 PWA
 - [ ] 浏览器扩展
 
-详见 [GitHub Projects](https://github.com/<your-username>/MiniAI/projects)。
+详见 [GitHub Projects](https://github.com/conuausal/MiniAI/projects)。
 
 ---
 
@@ -349,7 +349,7 @@ It addresses the everyday pain points documented in [`我的日常痛点.md.md`]
 ### Quick Start
 
 ```bash
-git clone https://github.com/<your-username>/MiniAI.git
+git clone https://github.com/conuausal/MiniAI.git
 cd MiniAI
 cp backend/.env.example backend/.env
 $EDITOR backend/.env          # fill in at least one API key

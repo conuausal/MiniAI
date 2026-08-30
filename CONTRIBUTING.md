@@ -12,7 +12,7 @@
 ### 1. Fork & Clone
 
 ```bash
-git clone https://github.com/<your-username>/MiniAI.git
+git clone https://github.com/conuausal/MiniAI.git
 cd MiniAI
 git checkout -b feature/your-feature-name
 ```

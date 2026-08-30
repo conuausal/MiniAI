@@ -25,20 +25,7 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
         return None
     text = user_text.lower().strip()
 
-    # 时间相关
-    for tool in tools:
-        if tool["function"]["name"] == "get_current_time":
-            if any(kw in text for kw in ["几点", "时间", "现在", "今天", "几号", "周几", "what time", "current time", "today"]):
-                return {
-                    "id": f"call_{int(datetime.now().timestamp())}",
-                    "type": "function",
-                    "function": {
-                        "name": "get_current_time",
-                        "arguments": json.dumps({"timezone_offset_hours": 8}, ensure_ascii=False),
-                    },
-                }
-
-    # 数学计算
+    # 数学计算（优先：表达式比"时间"关键词更具体）
     for tool in tools:
         if tool["function"]["name"] == "calculate":
             # 提取数学表达式
@@ -55,6 +42,19 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
                             "arguments": json.dumps({"expression": expr}, ensure_ascii=False),
                         },
                     }
+
+    # 时间相关
+    for tool in tools:
+        if tool["function"]["name"] == "get_current_time":
+            if any(kw in text for kw in ["几点", "时间", "现在", "今天", "几号", "周几", "what time", "current time", "today"]):
+                return {
+                    "id": f"call_{int(datetime.now().timestamp())}",
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_time",
+                        "arguments": json.dumps({"timezone_offset_hours": 8}, ensure_ascii=False),
+                    },
+                }
 
     # 联网搜索
     for tool in tools:
@@ -96,6 +96,19 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
                     "function": {
                         "name": "read_file",
                         "arguments": json.dumps({"path": m.group(1)}, ensure_ascii=False),
+                    },
+                }
+
+    # 随机二次元
+    for tool in tools:
+        if tool["function"]["name"] == "get_random_anime":
+            if any(kw in text for kw in ["随机二次元", "二次元", "anime", "来张图", "来张二次元", "壁纸"]):
+                return {
+                    "id": f"call_{int(datetime.now().timestamp())}",
+                    "type": "function",
+                    "function": {
+                        "name": "get_random_anime",
+                        "arguments": "{}",
                     },
                 }
 
@@ -338,6 +351,14 @@ def _gen_with_tool_result(tool_name: str, tool_result: str, user_text: str) -> s
 ---
 
 ✅ 这是从项目目录读取的文件。"""
+    if tool_name == "get_random_anime":
+        return f"""## 🎴 随机二次元
+
+![随机二次元]({tool_result})
+
+---
+
+✅ 这是来自 Elaina API 的随机二次元图片。也可以去「🎴 二次元」页面继续浏览。"""
     return f"""✅ 工具 **{tool_name}** 执行结果：
 
 ```
@@ -418,8 +439,9 @@ class _DemoStream:
 
     async def __aiter__(self):
         # 流式输出文本（按词分块，更自然）
+        # |.+$ 兜底捕获末尾没有分隔符的残段，避免文本被截断
         import re as _re
-        chunks = _re.findall(r".*?[\s，。！？；：、,.!?;:\n]|$", self._text)
+        chunks = _re.findall(r".*?[\s，。！？；：、,.!?;:\n]|.+$", self._text)
         if not chunks:
             chunks = [self._text]
         sent = 0
@@ -466,16 +488,33 @@ class _DemoChatCompletions:
     ):
         # 取最近的 user 或 tool 消息（用于意图检测）
         user_text = ""
+        last_role = "user"
+        last_tool_name = ""
+        last_tool_result = ""
         for m in reversed(messages):
-            if m.get("role") in ("user", "tool"):
+            role = m.get("role")
+            if role in ("user", "tool"):
+                last_role = role
                 user_text = m.get("content", "")
+                if role == "tool":
+                    last_tool_name = str(m.get("name", "") or "")
+                    last_tool_result = user_text
                 break
         if isinstance(user_text, list):
             user_text = " ".join(
                 (c.get("text", "") if isinstance(c, dict) else str(c))
                 for c in user_text
             )
-        # 决定是否调用工具
+
+        # 上一条是 tool 结果：直接基于真实结果生成最终回答，不再重复调用工具
+        if last_role == "tool":
+            return (
+                _DemoStream(_gen_with_tool_result(last_tool_name, last_tool_result, user_text), [], model)
+                if stream
+                else _DemoResponse(_gen_with_tool_result(last_tool_name, last_tool_result, user_text), [], model)
+            )
+
+        # 否则仅对真实用户输入做工具检测
         tool_calls = []
         if tools:
             tc = _detect_tool_call(user_text, tools)
@@ -483,10 +522,7 @@ class _DemoChatCompletions:
                 tool_calls.append(tc)
 
         # 生成文本（如果决定调用工具，第一次 yield 的 text 留空）
-        if tool_calls:
-            text = ""
-        else:
-            text = generate_reply(user_text, messages)
+        text = "" if tool_calls else generate_reply(user_text, messages)
 
         if stream:
             return _DemoStream(text, tool_calls, model)

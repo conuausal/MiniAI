@@ -50,40 +50,27 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
     # === 🐋 DeepSeek ===
     "deepseek-chat":      {"provider": "deepseek",  "label": "DeepSeek-V3",       "tags": ["推荐", "中文"]},
     "deepseek-reasoner":  {"provider": "deepseek",  "label": "DeepSeek-R1",       "tags": ["推理"]},
-    "deepseek-coder":     {"provider": "deepseek",  "label": "DeepSeek-Coder-V2", "tags": ["代码"]},
+    "deepseek-v4-flash":  {"provider": "deepseek",  "label": "DeepSeek-V4",       "tags": ["推荐", "最新", "推理"]},
 
     # === 🧠 OpenAI ===
     "gpt-4o":             {"provider": "openai",    "label": "GPT-4o",            "tags": ["多模态"]},
     "gpt-4o-mini":        {"provider": "openai",    "label": "GPT-4o mini",       "tags": ["快速", "经济"]},
-    "gpt-4-turbo":        {"provider": "openai",    "label": "GPT-4 Turbo",       "tags": []},
-    "gpt-3.5-turbo":      {"provider": "openai",    "label": "GPT-3.5 Turbo",     "tags": ["经济"]},
-    "o1-preview":         {"provider": "openai",    "label": "OpenAI o1",         "tags": ["推理"]},
-    "o1-mini":            {"provider": "openai",    "label": "OpenAI o1 mini",    "tags": ["推理", "经济"]},
 
     # === 🤖 MiniMax ===
     "MiniMax-M3":           {"provider": "MiniMax",     "label": "MiniMax-M3",         "tags": ["推荐", "多模态"]},
-    "MiniMax-Text-01":      {"provider": "MiniMax",     "label": "MiniMax-Text-01",    "tags": ["长文本"]},
-    "abab6.5s-chat":       {"provider": "MiniMax",     "label": "abab6.5s",           "tags": []},
 
     # === 🀄 智谱 GLM ===
     "glm-4-plus":          {"provider": "zhipu",     "label": "GLM-4-Plus",         "tags": ["推荐"]},
     "glm-4-flash":         {"provider": "zhipu",     "label": "GLM-4-Flash",        "tags": ["免费"]},
-    "glm-4-long":          {"provider": "zhipu",     "label": "GLM-4-Long",         "tags": ["长文本"]},
 
     # === 🌙 Moonshot Kimi ===
     "moonshot-v1-128k":    {"provider": "moonshot",  "label": "Kimi 128K",          "tags": ["长文本", "推荐"]},
-    "moonshot-v1-32k":     {"provider": "moonshot",  "label": "Kimi 32K",           "tags": []},
-    "moonshot-v1-8k":      {"provider": "moonshot",  "label": "Kimi 8K",            "tags": ["快速"]},
 
     # === ☁️ 通义千问 Qwen ===
     "qwen-max":            {"provider": "qwen",      "label": "Qwen-Max",           "tags": ["中文", "推荐"]},
     "qwen-plus":           {"provider": "qwen",      "label": "Qwen-Plus",          "tags": []},
-    "qwen-turbo":          {"provider": "qwen",      "label": "Qwen-Turbo",         "tags": ["快速"]},
-    "qwen-long":           {"provider": "qwen",      "label": "Qwen-Long",          "tags": ["长文本"]},
 
     # === 💎 Google Gemini ===
-    "gemini-1.5-pro":      {"provider": "gemini",    "label": "Gemini 1.5 Pro",     "tags": ["长文本", "多模态"]},
-    "gemini-1.5-flash":    {"provider": "gemini",    "label": "Gemini 1.5 Flash",   "tags": ["快速", "免费"]},
     "gemini-2.0-flash-exp":{"provider": "gemini",    "label": "Gemini 2.0 Flash (实验)", "tags": ["最新"]},
 }
 
@@ -326,15 +313,25 @@ async def stream_chat(
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
-                    idx = tc.index
+                    # demo 模型产出 dict，OpenAI SDK 产出 Pydantic 对象
+                    if isinstance(tc, dict):
+                        idx = tc.get("index", 0)
+                        tc_id = tc.get("id") or ""
+                        fn = tc.get("function") or {}
+                        fn_name = fn.get("name") or ""
+                        fn_args = fn.get("arguments") or ""
+                    else:
+                        idx = tc.index
+                        tc_id = tc.id or ""
+                        fn_name = tc.function.name if tc.function else ""
+                        fn_args = tc.function.arguments if tc.function else ""
                     slot = tool_calls_acc.setdefault(idx, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                    if tc.id:
-                        slot["id"] = tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            slot["function"]["name"] += tc.function.name
-                        if tc.function.arguments:
-                            slot["function"]["arguments"] += tc.function.arguments
+                    if tc_id:
+                        slot["id"] = tc_id
+                    if fn_name:
+                        slot["function"]["name"] += fn_name
+                    if fn_args:
+                        slot["function"]["arguments"] += fn_args
 
             if choice.finish_reason == "tool_calls" and tool_calls_acc:
                 payload = [tool_calls_acc[k] for k in sorted(tool_calls_acc.keys())]

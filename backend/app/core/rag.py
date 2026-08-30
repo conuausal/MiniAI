@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import re
 import uuid
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -28,6 +30,7 @@ class RagEngine:
             chunk_overlap=80,
             separators=["\n\n", "\n", "。", "！", "？", ".", " ", ""],
         )
+        self._reranker = None  # 交叉编码器重排模型（懒加载）
 
     async def bootstrap(self) -> None:
         """启动时初始化持久化向量库客户端。"""
@@ -78,7 +81,7 @@ class RagEngine:
         doc_id = uuid.uuid4().hex
         ids = [f"{doc_id}-{i}" for i in range(len(chunks))]
         metadatas = [
-            {"source": original_name, "chunk": i, "doc_id": doc_id}
+            {"source": original_name, "chunk": i, "doc_id": doc_id, "created_at": datetime.utcnow().isoformat()}
             for i in range(len(chunks))
         ]
         col = self._collection(collection)
@@ -98,13 +101,31 @@ class RagEngine:
         doc_id = uuid.uuid4().hex
         ids = [f"{doc_id}-{i}" for i in range(len(chunks))]
         metadatas = [
-            {"source": source, "chunk": i, "doc_id": doc_id} for i in range(len(chunks))
+            {"source": source, "chunk": i, "doc_id": doc_id, "created_at": datetime.utcnow().isoformat()}
+            for i in range(len(chunks))
         ]
         col = self._collection(collection)
         col.add(documents=chunks, ids=ids, metadatas=metadatas)
         return {"doc_id": doc_id, "chunks": len(chunks)}
 
-    # ---------- 检索 ----------
+    # ---------- 检索（混合检索 + 重排序） ----------
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        """粗粒度 tokenization：中文按单字、英文/数字按连续串，供 BM25 使用。"""
+        return re.findall(r"[A-Za-z0-9_]+|[一-鿿]", text)
+
+    def _get_reranker(self):
+        """懒加载交叉编码器重排模型（首次查询时下载，不阻塞启动）。"""
+        if self._reranker is None:
+            if settings.hf_endpoint:
+                import os
+                os.environ.setdefault("HF_ENDPOINT", settings.hf_endpoint)
+            from sentence_transformers import CrossEncoder
+            logger.info("⏳ 加载重排模型: {}", settings.rerank_model)
+            self._reranker = CrossEncoder(settings.rerank_model, max_length=512)
+            logger.info("✅ 重排模型已加载")
+        return self._reranker
 
     async def query(
         self,
@@ -112,23 +133,70 @@ class RagEngine:
         top_k: int = 4,
         collection: str = "default",
     ) -> List[dict]:
+        """混合检索流水线：稠密向量 + BM25 稀疏 → RRF 融合 → 交叉编码器重排。
+
+        重排失败时自动降级为 RRF 融合结果，不阻断检索。
+        """
         col = self._collection(collection)
+
+        # ---- 1) 稠密检索（ChromaDB 向量） ----
+        dense_k = max(top_k * 4, 10)
+        dense_docs: List[str] = []
         try:
-            res = col.query(query_texts=[question], n_results=top_k)
+            res = col.query(query_texts=[question], n_results=dense_k)
+            dense_docs = [d for d in res.get("documents", [[]])[0] if d]
         except Exception as e:
             logger.warning("向量检索失败: {}", e)
+
+        # ---- 2) 稀疏检索（BM25，查询时现算） ----
+        sparse_docs: List[str] = []
+        meta_by_doc: Dict[str, dict] = {}
+        try:
+            all_items = col.get(include=["documents", "metadatas"])
+            all_docs = [d for d in (all_items.get("documents") or []) if d]
+            all_metas = list(all_items.get("metadatas") or [])
+            meta_by_doc = {d: (m or {}) for d, m in zip(all_docs, all_metas)}
+            if all_docs:
+                from rank_bm25 import BM25Okapi
+                bm25 = BM25Okapi([self._tokenize(d) for d in all_docs])
+                scores = bm25.get_scores(self._tokenize(question))
+                ordered = sorted(range(len(all_docs)), key=lambda i: scores[i], reverse=True)
+                sparse_docs = [all_docs[i] for i in ordered if scores[i] > 0]
+        except Exception as e:
+            logger.warning("稀疏检索失败: {}", e)
+
+        # ---- 3) Reciprocal Rank Fusion 融合 ----
+        rrf: Dict[str, float] = {}
+        for rank, doc in enumerate(dense_docs):
+            rrf[doc] = rrf.get(doc, 0.0) + 1.0 / (60 + rank + 1)
+        for rank, doc in enumerate(sparse_docs):
+            rrf[doc] = rrf.get(doc, 0.0) + 1.0 / (60 + rank + 1)
+
+        candidates = sorted(rrf.items(), key=lambda x: x[1], reverse=True)
+        if not candidates:
             return []
-        docs = res.get("documents", [[]])[0]
-        metas = res.get("metadatas", [[]])[0]
-        dists = res.get("distances", [[]])[0]
+        cand_top = [doc for doc, _ in candidates[: max(top_k * 3, 5)]]
+
+        # ---- 4) 交叉编码器重排 ----
+        try:
+            reranker = self._get_reranker()
+            scores = reranker.predict([[question, doc] for doc in cand_top])
+            ordered = [cand_top[i] for i in sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)]
+            top_docs = ordered[:top_k]
+        except Exception as e:
+            logger.warning("重排失败，降级为 RRF 融合结果: {}", e)
+            top_docs = cand_top[:top_k]
+
+        # ---- 5) 组装结果 ----
         out = []
-        for doc, meta, dist in zip(docs, metas, dists):
+        for doc in top_docs:
+            meta = meta_by_doc.get(doc, {})
             out.append(
                 {
                     "content": doc,
-                    "source": (meta or {}).get("source", ""),
-                    "chunk": (meta or {}).get("chunk", 0),
-                    "score": 1 - dist if dist is not None else None,
+                    "source": meta.get("source", ""),
+                    "chunk": meta.get("chunk", 0),
+                    "score": rrf.get(doc, 0.0),
                 }
             )
         return out
@@ -149,6 +217,7 @@ class RagEngine:
                     "source": (meta or {}).get("source", ""),
                     "chunks": 0,
                     "collection": collection,
+                    "created_at": (meta or {}).get("created_at"),
                 }
             seen[did]["chunks"] += 1
         return list(seen.values())

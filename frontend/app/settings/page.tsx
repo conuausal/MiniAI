@@ -112,7 +112,7 @@ export default function SettingsPage() {
           <section className="glass-card rounded-2xl p-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
             <h2 className="font-semibold mb-3">💡 关于 MiniAI</h2>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <Info label="版本" value="v0.7.0" />
+              <Info label="版本" value="v0.8.0" />
               <Info label="开源协议" value="MIT" />
               <Info label="技术栈" value="FastAPI · Next.js · ChromaDB" />
               <Info label="数据存储" value="全本地" />

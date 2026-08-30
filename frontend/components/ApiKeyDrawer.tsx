@@ -137,7 +137,7 @@ export default function ApiKeyDrawer({ open, onClose }: Props) {
           <section>
             <h3 className="text-xs font-semibold text-text-soft uppercase tracking-wider mb-2">关于</h3>
             <div className="surface rounded-xl p-4 text-sm space-y-1.5 text-text-soft">
-              <p>🧠 MiniAI v0.5.0 · 开源个人 AI 助手</p>
+              <p>🧠 MiniAI v0.8.0 · 开源个人 AI 助手</p>
               <p>📦 数据全部本地存储（Key、会话、知识库）</p>
               <p>🔗 <a href="https://github.com/conuausal/MiniAI" target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">GitHub: conuausal/MiniAI</a></p>
             </div>

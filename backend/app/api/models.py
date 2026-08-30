@@ -29,6 +29,6 @@ async def get_models(
 
 @router.post("/reload")
 async def reload_models() -> dict:
+    """刷新模型清单（无缓存，直接重算）。"""
     from app.core import llm
-    llm._clients.clear()
     return {"reloaded": True, "count": len(llm.list_models())}

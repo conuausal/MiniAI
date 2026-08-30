@@ -151,6 +151,20 @@ async def query_knowledge_tool(
     return "\n\n".join(blocks)
 
 
+async def get_random_anime() -> str:
+    """获取一张随机二次元图片 URL（真实调用外部接口）。"""
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            resp = await client.get(settings.random_anime_api)
+            if resp.status_code >= 400:
+                return f"获取失败：外部接口返回 {resp.status_code}"
+            return str(resp.url)
+    except Exception as e:
+        return f"获取随机二次元图片失败: {e}"
+
+
 # ============== 注册表 ==============
 
 ToolRun = Callable[..., Awaitable[str]]
@@ -257,6 +271,13 @@ _register(
         "required": ["path"],
     },
     run=read_file,
+)
+
+_register(
+    name="get_random_anime",
+    description="获取一张随机二次元图片 URL。当用户要求'随机二次元'、'来张二次元图/图'、'二次元壁纸'时调用。",
+    parameters={"type": "object", "properties": {}},
+    run=get_random_anime,
 )
 
 

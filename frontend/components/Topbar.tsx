@@ -23,6 +23,7 @@ export default function Topbar() {
     { href: '/', label: '对话', emoji: '💬' },
     { href: '/write', label: '写作', emoji: '✍️' },
     { href: '/knowledge', label: '知识库', emoji: '📚' },
+    { href: '/anime', label: '二次元', emoji: '🎴' },
   ];
 
   return (

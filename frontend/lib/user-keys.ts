@@ -142,13 +142,16 @@ export function useUserKeys() {
   const customs = useSyncExternalStore(subscribe, () => customsCache, () => ({} as CustomProviders));
   const hasAnyKey = Object.values(keys).some(Boolean);
   const hasAnyCustom = Object.keys(customs).length > 0;
+  // demo 模型永远可用（无需 key），所以 hasAny 永远 true
+  // 真正判断"能否对话"在 ChatWindow 里看 enabled 模型数
+  const hasAny = true;
 
   const set = useCallback((provider: keyof UserKeys, value: string) => setKey(provider, value), []);
   const clear = useCallback(() => clearAllKeys(), []);
   const setCustom = useCallback((id: string, p: CustomProvider) => setCustomProvider(id, p), []);
   const removeCustom = useCallback((id: string) => removeCustomProvider(id), []);
 
-  return { keys, customs, hasAnyKey, hasAnyCustom, set, clear, setCustom, removeCustom };
+  return { keys, customs, hasAnyKey, hasAnyCustom, hasAny, set, clear, setCustom, removeCustom };
 }
 
 // ============== Header 注入器（fetch 拦截） ==============

@@ -9,6 +9,15 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+    environment:
+      # 容器内用服务名访问，覆盖本地 .env 里的 localhost
+      - DATABASE_URL=mysql+aiomysql://miniai:miniai@mysql:3306/miniai
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - miniai-data:/app/data
     ports:
@@ -18,6 +27,45 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  mysql:
+    image: mysql:8.0
+    container_name: miniai-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: miniai
+      MYSQL_USER: miniai
+      MYSQL_PASSWORD: miniai
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 宿主 3306 常被本机原生 MySQL 占用，容器映射到 3307 共存
+      - "3307:3306"
+    volumes:
+      - miniai-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uminiai", "-pminiai"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: miniai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - miniai-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   frontend:
     build:
@@ -38,3 +86,5 @@ services:
 
 volumes:
   miniai-data:
+  miniai-mysql-data:
+  miniai-redis-data:

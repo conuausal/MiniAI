@@ -78,6 +78,8 @@ export const api = {
     ),
 
   listTools: () => jsonFetch<{ tools: ToolInfo[] }>('/api/tools'),
+
+  randomAnime: () => jsonFetch<{ url: string }>('/api/anime/random'),
 };
 
 // ============== 流式聊天（SSE） ==============
