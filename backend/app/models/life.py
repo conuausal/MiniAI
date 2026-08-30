@@ -11,8 +11,9 @@ from app.db.database import Base
 
 
 class TimestampsMixin:
-    """公共主键与时间戳。"""
+    """公共主键、时间戳与用户归属。"""
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -207,9 +208,10 @@ class LifeGameRecord(TimestampsMixin, Base):
 # ============ 设置 ============
 
 class LifeSetting(Base):
-    """设置项：key 为唯一主键（不复用 TimestampsMixin 的 id，避免复合主键）。"""
+    """设置项：复合主键 (key, user_id)，每个用户各自的设置互不干扰。"""
     __tablename__ = "life_settings"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     value: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

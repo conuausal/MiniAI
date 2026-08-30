@@ -24,25 +24,28 @@ class MemoryStore:
 
     # ---------- Session ----------
 
-    async def create_session(self, title: str = "新对话", model: str = "deepseek-chat") -> Session:
-        sess = Session(id=_new_session_id(), title=title, model=model)
+    async def create_session(self, title: str = "新对话", model: str = "deepseek-chat", user_id: int = 0) -> Session:
+        sess = Session(id=_new_session_id(), title=title, model=model, user_id=user_id)
         self.db.add(sess)
         await self.db.commit()
         await self.db.refresh(sess)
         return sess
 
-    async def get_session(self, session_id: str) -> Optional[Session]:
-        return await self.db.get(Session, session_id)
+    async def get_session(self, session_id: str, user_id: Optional[int] = None) -> Optional[Session]:
+        stmt = select(Session).where(Session.id == session_id)
+        if user_id is not None:
+            stmt = stmt.where(Session.user_id == user_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
-    async def list_sessions(self, limit: int = 50) -> List[Session]:
-        stmt = select(Session).order_by(Session.updated_at.desc()).limit(limit)
+    async def list_sessions(self, user_id: int, limit: int = 50) -> List[Session]:
+        stmt = select(Session).where(Session.user_id == user_id).order_by(Session.updated_at.desc()).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def update_session(
-        self, session_id: str, *, title: Optional[str] = None, model: Optional[str] = None
+        self, session_id: str, user_id: int, *, title: Optional[str] = None, model: Optional[str] = None
     ) -> Optional[Session]:
-        sess = await self.get_session(session_id)
+        sess = await self.get_session(session_id, user_id)
         if not sess:
             return None
         if title is not None:
@@ -54,8 +57,8 @@ class MemoryStore:
         await self.db.refresh(sess)
         return sess
 
-    async def delete_session(self, session_id: str) -> bool:
-        sess = await self.get_session(session_id)
+    async def delete_session(self, session_id: str, user_id: int) -> bool:
+        sess = await self.get_session(session_id, user_id)
         if not sess:
             return False
         await self.db.delete(sess)

@@ -138,11 +138,12 @@ async def query_knowledge_tool(
     question: str,
     top_k: int = 4,
     collection: str = "default",
+    user_id: int = 0,
 ) -> str:
-    """RAG 检索工具：从指定集合召回相关片段。"""
+    """RAG 检索工具：从当前用户的知识库召回相关片段。"""
     from app.core.rag import rag_engine
 
-    chunks = await rag_engine.query(question, top_k=top_k, collection=collection)
+    chunks = await rag_engine.query(question, top_k=top_k, collection=collection, user_id=user_id)
     if not chunks:
         return f"知识库 ({collection}) 中未找到相关内容。"
     blocks = []
@@ -285,8 +286,8 @@ def get_tool_names() -> List[str]:
     return list(_REGISTRY.keys())
 
 
-async def execute_tool(name: str, arguments: Dict[str, Any]) -> str:
-    """执行指定工具，返回字符串结果。"""
+async def execute_tool(name: str, arguments: Dict[str, Any], user_id: int = 0) -> str:
+    """执行指定工具，返回字符串结果。user_id 透传给需要用户上下文的工具（如 RAG）。"""
     tool = _REGISTRY.get(name)
     if not tool:
         return f"错误：未知工具 {name}"
@@ -294,6 +295,10 @@ async def execute_tool(name: str, arguments: Dict[str, Any]) -> str:
         # 过滤掉模型可能传入的非法键
         valid_keys = set(tool.parameters.get("properties", {}).keys())
         clean_args = {k: v for k, v in (arguments or {}).items() if k in valid_keys}
+        # 注入 user_id（仅当工具函数接受该参数）
+        import inspect
+        if "user_id" in inspect.signature(tool.run).parameters:
+            clean_args["user_id"] = user_id
         return await tool.run(**clean_args)
     except Exception as e:
         logger.exception("工具 {name} 执行失败", name=name)

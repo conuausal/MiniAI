@@ -9,9 +9,11 @@ from typing import AsyncIterator, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.core.auth import get_current_user
 from app.core.llm import parse_custom_providers, parse_user_keys
 from app.core.writing_agents import OutlineItem, run_writing_pipeline
 from app.models.schemas import WriteRequest
+from app.models.user import User
 
 router = APIRouter()
 
@@ -44,6 +46,7 @@ async def write_article(
     req: WriteRequest,
     user_keys: dict = Depends(get_user_keys),
     custom_providers: dict = Depends(get_custom_providers),
+    user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
@@ -75,6 +78,7 @@ async def write_article(
                     collection=req.collection,
                     user_keys=user_keys,
                     custom_providers=custom_providers,
+                    user_id=user.id,
                     send=emit,
                 )
                 emit({"event": "done"})
@@ -109,6 +113,7 @@ async def write_article_sync(
     req: WriteRequest,
     user_keys: dict = Depends(get_user_keys),
     custom_providers: dict = Depends(get_custom_providers),
+    user: User = Depends(get_current_user),
 ) -> dict:
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="topic 不能为空")
@@ -129,6 +134,7 @@ async def write_article_sync(
         collection=req.collection,
         user_keys=user_keys,
         custom_providers=custom_providers,
+        user_id=user.id,
         send=collect,
     )
 

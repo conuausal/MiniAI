@@ -72,6 +72,7 @@ class RagEngine:
         file_path: str,
         original_name: str,
         collection: str = "default",
+        user_id: int = 0,
     ) -> dict:
         text = self._load_text(Path(file_path))
         if not text.strip():
@@ -81,12 +82,12 @@ class RagEngine:
         doc_id = uuid.uuid4().hex
         ids = [f"{doc_id}-{i}" for i in range(len(chunks))]
         metadatas = [
-            {"source": original_name, "chunk": i, "doc_id": doc_id, "created_at": datetime.utcnow().isoformat()}
+            {"source": original_name, "chunk": i, "doc_id": doc_id, "user_id": user_id, "created_at": datetime.utcnow().isoformat()}
             for i in range(len(chunks))
         ]
         col = self._collection(collection)
         col.add(documents=chunks, ids=ids, metadatas=metadatas)
-        logger.info("📥 入库 {} → {} chunks (collection={})", original_name, len(chunks), collection)
+        logger.info("📥 入库 {} → {} chunks (collection={}, user={})", original_name, len(chunks), collection, user_id)
         return {"doc_id": doc_id, "chunks": len(chunks)}
 
     async def add_text(
@@ -94,6 +95,7 @@ class RagEngine:
         text: str,
         source: str = "manual",
         collection: str = "default",
+        user_id: int = 0,
     ) -> dict:
         if not text.strip():
             raise ValueError("文本为空")
@@ -101,7 +103,7 @@ class RagEngine:
         doc_id = uuid.uuid4().hex
         ids = [f"{doc_id}-{i}" for i in range(len(chunks))]
         metadatas = [
-            {"source": source, "chunk": i, "doc_id": doc_id, "created_at": datetime.utcnow().isoformat()}
+            {"source": source, "chunk": i, "doc_id": doc_id, "user_id": user_id, "created_at": datetime.utcnow().isoformat()}
             for i in range(len(chunks))
         ]
         col = self._collection(collection)
@@ -115,16 +117,30 @@ class RagEngine:
         """粗粒度 tokenization：中文按单字、英文/数字按连续串，供 BM25 使用。"""
         return re.findall(r"[A-Za-z0-9_]+|[一-鿿]", text)
 
-    def _get_reranker(self):
-        """懒加载交叉编码器重排模型（首次查询时下载，不阻塞启动）。"""
-        if self._reranker is None:
+    async def _get_reranker(self):
+        """懒加载交叉编码器重排模型。
+
+        - 首次查询时尝试下载，限时 30 秒，避免因网络问题阻塞请求；
+        - 加载失败缓存为 False，后续查询直接降级 RRF，不重复尝试。
+        """
+        if self._reranker is not None:
+            return self._reranker  # 已加载成功，或已标记失败(False)
+        import asyncio
+        try:
             if settings.hf_endpoint:
                 import os
                 os.environ.setdefault("HF_ENDPOINT", settings.hf_endpoint)
             from sentence_transformers import CrossEncoder
+
+            def _load():
+                return CrossEncoder(settings.rerank_model, max_length=512)
+
             logger.info("⏳ 加载重排模型: {}", settings.rerank_model)
-            self._reranker = CrossEncoder(settings.rerank_model, max_length=512)
+            self._reranker = await asyncio.wait_for(asyncio.to_thread(_load), timeout=30)
             logger.info("✅ 重排模型已加载")
+        except Exception as e:
+            logger.warning("重排模型加载失败（后续查询降级为 RRF）: {}", e)
+            self._reranker = False
         return self._reranker
 
     async def query(
@@ -132,10 +148,12 @@ class RagEngine:
         question: str,
         top_k: int = 4,
         collection: str = "default",
+        user_id: int = 0,
     ) -> List[dict]:
         """混合检索流水线：稠密向量 + BM25 稀疏 → RRF 融合 → 交叉编码器重排。
 
         重排失败时自动降级为 RRF 融合结果，不阻断检索。
+        通过 where={"user_id": ...} 保证只召回当前用户的知识库。
         """
         col = self._collection(collection)
 
@@ -143,7 +161,7 @@ class RagEngine:
         dense_k = max(top_k * 4, 10)
         dense_docs: List[str] = []
         try:
-            res = col.query(query_texts=[question], n_results=dense_k)
+            res = col.query(query_texts=[question], n_results=dense_k, where={"user_id": user_id})
             dense_docs = [d for d in res.get("documents", [[]])[0] if d]
         except Exception as e:
             logger.warning("向量检索失败: {}", e)
@@ -152,7 +170,7 @@ class RagEngine:
         sparse_docs: List[str] = []
         meta_by_doc: Dict[str, dict] = {}
         try:
-            all_items = col.get(include=["documents", "metadatas"])
+            all_items = col.get(include=["documents", "metadatas"], where={"user_id": user_id})
             all_docs = [d for d in (all_items.get("documents") or []) if d]
             all_metas = list(all_items.get("metadatas") or [])
             meta_by_doc = {d: (m or {}) for d, m in zip(all_docs, all_metas)}
@@ -179,7 +197,9 @@ class RagEngine:
 
         # ---- 4) 交叉编码器重排 ----
         try:
-            reranker = self._get_reranker()
+            reranker = await self._get_reranker()
+            if not reranker:
+                raise RuntimeError("重排模型不可用")
             scores = reranker.predict([[question, doc] for doc in cand_top])
             ordered = [cand_top[i] for i in sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)]
             top_docs = ordered[:top_k]
@@ -203,9 +223,9 @@ class RagEngine:
 
     # ---------- 列表 / 删除 ----------
 
-    async def list_documents(self, collection: str = "default") -> List[dict]:
+    async def list_documents(self, collection: str = "default", user_id: int = 0) -> List[dict]:
         col = self._collection(collection)
-        items = col.get(include=["metadatas"])
+        items = col.get(include=["metadatas"], where={"user_id": user_id})
         seen: dict[str, dict] = {}
         for meta in items.get("metadatas", []):
             did = (meta or {}).get("doc_id")
@@ -222,9 +242,9 @@ class RagEngine:
             seen[did]["chunks"] += 1
         return list(seen.values())
 
-    async def delete_document(self, doc_id: str, collection: str = "default") -> bool:
+    async def delete_document(self, doc_id: str, collection: str = "default", user_id: int = 0) -> bool:
         col = self._collection(collection)
-        items = col.get(where={"doc_id": doc_id})
+        items = col.get(where={"doc_id": doc_id, "user_id": user_id})
         if not items.get("ids"):
             return False
         col.delete(ids=items["ids"])

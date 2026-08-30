@@ -30,6 +30,7 @@ async def init_db() -> None:
     # 触发模型注册
     from app.models import orm  # noqa: F401
     from app.models import life  # noqa: F401
+    from app.models import user  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

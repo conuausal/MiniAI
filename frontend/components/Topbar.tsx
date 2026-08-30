@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useUserKeys } from '@/lib/user-keys';
 import { useChatStore } from '@/lib/store';
 import { useDarkMode } from '@/lib/theme';
+import { useAuth } from '@/lib/auth';
 import ApiKeyDrawer from './ApiKeyDrawer';
 import ModelSelector from './ModelSelector';
 
 export default function Topbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { hasAny } = useUserKeys();
+  const { user, logout } = useAuth();
   const { enableVoiceOutput, setEnableVoiceOutput, enableVoiceInput, setEnableVoiceInput } = useChatStore();
   const { isDark, toggle } = useDarkMode();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -94,6 +97,18 @@ export default function Topbar() {
               label="设置"
               hasBadge={!hasAny}
             />
+            {user && (
+              <div className="flex items-center gap-1 ml-1">
+                <span className="text-xs text-text-soft max-w-[72px] truncate hidden md:inline" title={user.username}>👤 {user.username}</span>
+                <button
+                  onClick={async () => { await logout(); router.push('/login'); }}
+                  className="btn btn-ghost !p-2 text-xs"
+                  title="退出登录"
+                >
+                  ⎋
+                </button>
+              </div>
+            )}
             <a
               href="https://github.com/conuausal/MiniAI"
               target="_blank"

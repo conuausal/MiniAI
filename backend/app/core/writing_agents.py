@@ -219,6 +219,7 @@ async def researcher_agent(
     collection: str = "default",
     user_keys: Optional[dict] = None,
     custom_providers: Optional[dict] = None,
+    user_id: int = 0,
 ) -> SectionDraft:
     """Researcher：为单个章节收集素材。"""
     # 1) 收集素材：RAG + 联网
@@ -230,7 +231,7 @@ async def researcher_agent(
 
     if enable_rag:
         try:
-            chunks = await rag_engine.query(primary_query, top_k=4, collection=collection)
+            chunks = await rag_engine.query(primary_query, top_k=4, collection=collection, user_id=user_id)
             if chunks:
                 block = "\n\n".join(
                     f"- {c['content']}\n  [来源: {c['source']}, 相关度 {c.get('score', 0):.2f}]"
@@ -395,6 +396,7 @@ async def run_writing_pipeline(
     collection: str = "default",
     user_keys: Optional[dict] = None,
     custom_providers: Optional[dict] = None,
+    user_id: int = 0,
     emit: Optional[AsyncIterator] = None,
     send: Optional[callable] = None,
 ) -> WritingResult:
@@ -424,7 +426,7 @@ async def run_writing_pipeline(
         researcher_agent(
             item=item, topic=topic, model=model,
             enable_rag=enable_rag, enable_search=enable_search, collection=collection,
-            user_keys=user_keys, custom_providers=custom_providers,
+            user_keys=user_keys, custom_providers=custom_providers, user_id=user_id,
         )
         for item in outline
     ]

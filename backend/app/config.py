@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_secret_key: str = "change-me"
 
+    # ===== 登录鉴权 =====
+    jwt_secret: str = "change-me-to-a-long-random-string"  # 生产环境务必在 .env 里改强
+    jwt_expire_days: int = 7
+    cookie_secure: bool = False  # 公网 HTTPS 部署时置 True
+
     database_url: str = "mysql+aiomysql://miniai:miniai@localhost:3307/miniai"
 
     vector_store_dir: str = "./data/vector_store"

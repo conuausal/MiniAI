@@ -15,7 +15,7 @@ class Session(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), default="新对话")
     model: Mapped[str] = mapped_column(String(64), default="deepseek-chat")
-    user_id: Mapped[str] = mapped_column(String(64), default="default")
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -47,6 +47,7 @@ class KnowledgeDoc(Base):
     __tablename__ = "knowledge_docs"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     source: Mapped[str] = mapped_column(String(512))
     chunks: Mapped[int] = mapped_column(Integer, default=0)

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api import anime, chat, knowledge, life, models, sessions, tools, write
+from app.api import anime, auth, chat, knowledge, life, models, sessions, tools, write
 from app.config import settings
 from app.core.rag import rag_engine
 from app.db.database import init_db
@@ -46,6 +46,7 @@ app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
 app.include_router(write.router, prefix="/api/write", tags=["write"])
 app.include_router(anime.router, prefix="/api/anime", tags=["anime"])
 app.include_router(life.router, prefix="/api/life", tags=["life"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 
 @app.get("/health", tags=["meta"])
