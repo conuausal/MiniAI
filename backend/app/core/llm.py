@@ -91,14 +91,17 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
 # ---------- Key / 自定义 provider 解析 ----------
 
 def parse_user_keys(header_value: Optional[str]) -> Dict[str, str]:
-    """解析 X-User-API-Keys header。格式：JSON {provider: key}。"""
+    """解析 X-User-API-Keys header。格式：JSON {provider: key}。
+
+    保留原始大小写（因为 provider id 可能大小写敏感，如 "MiniMax"）。
+    """
     if not header_value:
         return {}
     try:
         data = json.loads(header_value)
         if not isinstance(data, dict):
             return {}
-        return {str(k).lower(): str(v) for k, v in data.items() if v}
+        return {str(k): str(v) for k, v in data.items() if v}
     except Exception as e:
         logger.warning("X-User-API-Keys 解析失败: {}", e)
         return {}
@@ -176,10 +179,15 @@ def _get_env_keys() -> Dict[str, Dict[str, str]]:
 
 
 def get_effective_keys(user_keys: Dict[str, str]) -> Dict[str, Dict[str, str]]:
-    """合并 user keys + .env，每个 provider 返回 {api_key, base_url}。"""
+    """合并 user keys + .env，每个 provider 返回 {api_key, base_url}。
+
+    大小写不敏感查找（支持 "MiniMax" / "minimax" / "MINIMAX" 任意大小写）。
+    """
     env = _get_env_keys()
+    # 把 user_keys 标准化成小写 key 索引
+    user_keys_lower = {k.lower(): v for k, v in user_keys.items()}
     for provider, val in env.items():
-        user_key = user_keys.get(provider, "").strip()
+        user_key = user_keys_lower.get(provider.lower(), "").strip()
         if user_key:
             val["api_key"] = user_key
             val["source"] = "user"
@@ -224,7 +232,15 @@ def list_models(
     def _has_valid_key(p: str) -> bool:
         if p == "demo":
             return True
-        info = keys.get(p, {})
+        # 大小写不敏感查找
+        info = keys.get(p) or keys.get(p.lower()) or keys.get(p.capitalize())
+        if info is None:
+            for k, v in keys.items():
+                if k.lower() == p.lower():
+                    info = v
+                    break
+        if info is None:
+            return False
         return bool((info.get("api_key") or "").strip())
 
     def _custom_valid(pid: str) -> bool:
