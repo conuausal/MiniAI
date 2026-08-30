@@ -506,8 +506,21 @@ class DemoClient:
 
 # ---------- 多智能体写作的 Demo 实现 ----------
 
-def planner_for_demo(topic: str, style: str, length: str) -> List[dict]:
-    """为 demo 模型生成大纲。"""
+def planner_for_demo(topic: str, style: str, length: str, custom_outline=None) -> List[dict]:
+    """为 demo 模型生成大纲。支持自定义章节标题。"""
+    if custom_outline:
+        # 用户自定义大纲：直接使用用户提供的章节标题
+        return [
+            {
+                "section_id": f"sec-{i+1}",
+                "title": title.strip(),
+                "focus": f"展开 {title.strip()} 的核心内容",
+                "angle": "理论与实践结合",
+                "search_queries": [f"{topic} {title}".strip()[:60]],
+            }
+            for i, title in enumerate(custom_outline)
+            if title and title.strip()
+        ]
     n_map = {"short": 3, "medium": 4, "long": 5}
     n = n_map.get(length, 4)
 

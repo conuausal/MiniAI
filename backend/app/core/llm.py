@@ -217,33 +217,42 @@ def list_models(
     user_keys: Optional[Dict[str, str]] = None,
     custom_providers: Optional[Dict[str, dict]] = None,
 ) -> List[ModelInfo]:
-    """返回所有可用模型。enabled = 是否有有效 key + 可解析的 client。"""
     keys = get_effective_keys(user_keys or {})
     custom = custom_providers or {}
     out: List[ModelInfo] = []
-    # 内置模型
+
+    def _has_valid_key(p: str) -> bool:
+        if p == "demo":
+            return True
+        info = keys.get(p, {})
+        return bool((info.get("api_key") or "").strip())
+
+    def _custom_valid(pid: str) -> bool:
+        info = custom.get(pid, {})
+        base = (info.get("base_url") or "").strip()
+        key = (info.get("api_key") or "").strip()
+        return bool(base and key)
+
     for mid, info in MODEL_REGISTRY.items():
         provider = info["provider"]
-        client = _client(provider, keys)
         out.append(ModelInfo(
             id=mid,
             label=str(info["label"]),
             provider=str(provider),
-            enabled=client is not None, tags=list(info.get("tags", [])),
+            enabled=_has_valid_key(str(provider)),
+            tags=list(info.get("tags", [])),
         ))
-    # 自定义 provider 的模型
     for pid, p in custom.items():
-        client = _custom_provider_client(custom, pid)
+        enabled = _custom_valid(pid)
         for m in p.get("models", []):
             out.append(ModelInfo(
                 id=str(m["id"]),
                 label=str(m["label"]),
                 provider=f"custom:{pid}",
-                enabled=client is not None,
+                enabled=enabled,
                 tags=list(m.get("tags", [])),
             ))
     return out
-
 
 def get_client(
     model_id: str,

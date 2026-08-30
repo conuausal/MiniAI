@@ -1,9 +1,10 @@
-"""多智能体写作：Planner → 并行 Researchers → Writer。
+﻿"""多智能体写作：Planner → 并行 Researchers → Writer。
 
 每个 Agent 都是一次独立的 LLM 调用 + （可选）RAG/联网搜索。
 通过 asyncio.gather 让多个 Researcher 并行执行，最后 Writer 整合。
 """
 from __future__ import annotations
+from types import SimpleNamespace
 
 import asyncio
 import json
@@ -127,15 +128,15 @@ async def planner_agent(
 
     # Demo 模型走专用路径
     if model in MODEL_REGISTRY and MODEL_REGISTRY[model].get("provider") == "demo":
-        outline_items = planner_for_demo(topic, style, length)
+        outline_items = planner_for_demo(topic, style, length, custom_outline=custom_outline)
         return [
-            type("O", (), {
-                "section_id": f"sec-{i+1}",
-                "title": o["title"],
-                "focus": o["focus"],
-                "angle": o["angle"],
-                "search_queries": o.get("search_queries", []),
-            })() for i, o in enumerate(outline_items)
+            SimpleNamespace(
+                section_id=f"sec-{i+1}",
+                title=o["title"],
+                focus=o["focus"],
+                angle=o["angle"],
+                search_queries=o.get("search_queries", []),
+            ) for i, o in enumerate(outline_items)
         ]
 
     result = await chat_once(
