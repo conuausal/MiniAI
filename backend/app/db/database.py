@@ -29,6 +29,7 @@ async def init_db() -> None:
     """首次启动时建表（生产环境建议替换为 Alembic 迁移）。"""
     # 触发模型注册
     from app.models import orm  # noqa: F401
+    from app.models import life  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
