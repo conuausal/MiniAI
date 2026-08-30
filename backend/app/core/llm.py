@@ -50,7 +50,8 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
     # === 🐋 DeepSeek ===
     "deepseek-chat":      {"provider": "deepseek",  "label": "DeepSeek-V3",       "tags": ["推荐", "中文"]},
     "deepseek-reasoner":  {"provider": "deepseek",  "label": "DeepSeek-R1",       "tags": ["推理"]},
-    "deepseek-v4-flash":  {"provider": "deepseek",  "label": "DeepSeek-V4",       "tags": ["推荐", "最新", "推理"]},
+    "deepseek-v4-pro":    {"provider": "deepseek",  "label": "DeepSeek-V4 Pro",    "tags": ["推荐", "最新", "推理"]},
+    "deepseek-v4-flash":  {"provider": "deepseek",  "label": "DeepSeek-V4 Flash",  "tags": ["最新", "快速", "经济"]},
 
     # === 🧠 OpenAI ===
     "gpt-4o":             {"provider": "openai",    "label": "GPT-4o",            "tags": ["多模态"]},
