@@ -43,6 +43,22 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
                         },
                     }
 
+    # 联网搜索（优先级高于时间：避免"今天AI新闻"这类含时间词的问题被当成时间查询）
+    for tool in tools:
+        if tool["function"]["name"] == "web_search":
+            if any(kw in text for kw in ["搜", "搜索", "新闻", "最新", "search", "find", "look up"]):
+                # 提取查询词（去掉前缀词）
+                q = re.sub(r"^(帮我|请|麻烦)?(搜一下|搜索|搜|查一下|查找|查|找一下|找)", "", user_text).strip()
+                q = q.rstrip("?？").strip() or user_text
+                return {
+                    "id": f"call_{int(datetime.now().timestamp())}",
+                    "type": "function",
+                    "function": {
+                        "name": "web_search",
+                        "arguments": json.dumps({"query": q, "max_results": 3}, ensure_ascii=False),
+                    },
+                }
+
     # 时间相关
     for tool in tools:
         if tool["function"]["name"] == "get_current_time":
@@ -53,22 +69,6 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
                     "function": {
                         "name": "get_current_time",
                         "arguments": json.dumps({"timezone_offset_hours": 8}, ensure_ascii=False),
-                    },
-                }
-
-    # 联网搜索
-    for tool in tools:
-        if tool["function"]["name"] == "web_search":
-            if any(kw in text for kw in ["搜", "搜索", "查", "新闻", "最新", "search", "find", "look up"]):
-                # 提取查询词（去掉前缀词）
-                q = re.sub(r"^(帮我|请|麻烦)?(搜索?|查(找|一下)?|找一下)", "", user_text).strip()
-                q = q.rstrip("?？").strip() or user_text
-                return {
-                    "id": f"call_{int(datetime.now().timestamp())}",
-                    "type": "function",
-                    "function": {
-                        "name": "web_search",
-                        "arguments": json.dumps({"query": q, "max_results": 3}, ensure_ascii=False),
                     },
                 }
 
@@ -116,6 +116,16 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
 
 
 # ---------- 回答生成 ----------
+
+def _strip_injected(text: str) -> str:
+    """去掉 RAG / 联网搜索注入的上下文（`\n\n---\n` 之后的部分），只保留原始提问。
+
+    否则注入内容里的关键词（如搜索结果中的"你好"）会误触发意图 / 工具识别。
+    """
+    if text and "\n\n---\n" in text:
+        return text.split("\n\n---\n", 1)[0]
+    return text
+
 
 def _detect_intent(text: str) -> str:
     """识别用户意图。"""
@@ -505,6 +515,8 @@ class _DemoChatCompletions:
                 (c.get("text", "") if isinstance(c, dict) else str(c))
                 for c in user_text
             )
+        # 去掉 RAG / 联网注入的上下文，只对原始提问做意图与工具识别
+        user_text = _strip_injected(user_text)
 
         # 上一条是 tool 结果：直接基于真实结果生成最终回答，不再重复调用工具
         if last_role == "tool":

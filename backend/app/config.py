@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Tavily
     tavily_api_key: str = ""
 
+    # 阿里云百炼（DashScope）Web Search（联网搜索），与 qwen 共用同一个 key
+    dashscope_api_key: str = ""
+
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
