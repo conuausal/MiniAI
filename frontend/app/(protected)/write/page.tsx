@@ -40,6 +40,7 @@ export default function WritePage() {
   const [state, setState] = useState<PipelineState>(initialPipelineState());
   const [ctl, setCtl] = useState<AbortController | null>(null);
   const [activeTab, setActiveTab] = useState<'pipeline' | 'article'>('pipeline');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (models.length === 0) {
@@ -231,9 +232,14 @@ export default function WritePage() {
                 </button>
               </div>
               {state.writer.article && (
-                <button onClick={downloadMd} className="btn btn-secondary !py-1.5 text-xs">
-                  ⬇️ 下载 .md
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setPreviewOpen(true)} className="btn btn-secondary !py-1.5 text-xs">
+                    👁️ 预览
+                  </button>
+                  <button onClick={downloadMd} className="btn btn-secondary !py-1.5 text-xs">
+                    ⬇️ 下载 .md
+                  </button>
+                </div>
               )}
             </div>
             {/* 渐变进度条 */}
@@ -282,6 +288,32 @@ export default function WritePage() {
           </div>
         </div>
       </div>
+
+      {/* 文章预览弹窗 */}
+      {previewOpen && state.writer.article && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="bg-surface rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
+              <h3 className="font-serif font-semibold text-hero">📄 文章预览</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={downloadMd} className="btn btn-secondary !py-1.5 text-xs">⬇️ 下载 .md</button>
+                <button onClick={() => setPreviewOpen(false)} className="btn btn-ghost !p-2" title="关闭">✕</button>
+              </div>
+            </header>
+            <div className="flex-1 overflow-y-auto p-8">
+              <article className="prose prose-base max-w-none font-serif">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
+              </article>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
