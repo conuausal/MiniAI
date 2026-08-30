@@ -72,14 +72,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+        # 容器内 localhost 指向前端自身，必须用 docker 服务名 backend
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://backend:8000}
     container_name: miniai-frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     environment:
-      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://backend:8000}
       - NODE_ENV=production
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
