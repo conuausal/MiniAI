@@ -152,17 +152,10 @@ async def query_knowledge_tool(
 
 
 async def get_random_anime() -> str:
-    """获取一张随机二次元图片 URL（真实调用外部接口）。"""
-    import httpx
+    """获取一张随机二次元图片 URL（缓存为本地稳定 URL，反复访问不变）。"""
+    from app.core.random_anime import fetch_random_anime
 
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
-            resp = await client.get(settings.random_anime_api)
-            if resp.status_code >= 400:
-                return f"获取失败：外部接口返回 {resp.status_code}"
-            return str(resp.url)
-    except Exception as e:
-        return f"获取随机二次元图片失败: {e}"
+    return await fetch_random_anime()
 
 
 # ============== 注册表 ==============
