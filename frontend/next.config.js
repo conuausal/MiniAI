@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // 必须关闭：Next 的 gzip 压缩会把代理转发的 SSE（/api/chat/completions、/api/write/article）
+  // 缓冲到流结束才发出，导致浏览器端完全没有流式/打字机效果（gzip 下实测跨度 0.0s）。
+  // 生产环境如需 gzip，请在 nginx 层做（并排除 text/event-stream）。
+  compress: false,
   experimental: {
     serverActions: { bodySizeLimit: '20mb' },
   },

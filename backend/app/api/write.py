@@ -127,7 +127,11 @@ async def write_article(
                 task_id, client_gone, task.done(), time.monotonic() - t0,
             )
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 @router.get("/article/{task_id}")

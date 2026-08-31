@@ -338,7 +338,11 @@ async def chat_completions(
             # 客户端断开（GeneratorExit）时兜底持久化已生成的部分内容；finally 中不得 yield
             _schedule_persist()
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 async def _run_with_tools(
