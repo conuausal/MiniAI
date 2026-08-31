@@ -37,10 +37,9 @@ export default function ThinkingCard({ thinking, live = false }: Props) {
         >
           <div className="flex items-center gap-2 text-xs text-violet-900 dark:text-violet-100">
             <span>💭</span>
-            <span className="font-medium">{live ? '思考中…' : '思考过程'}</span>
-            {elapsed != null && !live && (
-              <span className="text-violet-600/70 dark:text-violet-300/70">· {elapsed}s</span>
-            )}
+            <span className="font-medium">
+              {live ? '思考中…' : elapsed != null ? `已深度思考 · ${elapsed}s` : '思考过程'}
+            </span>
             {live && (
               <span className="flex gap-0.5">
                 <span className="w-1 h-1 rounded-full bg-violet-400 animate-pulse" />
