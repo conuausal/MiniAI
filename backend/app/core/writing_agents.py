@@ -9,12 +9,22 @@ from types import SimpleNamespace
 import asyncio
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from typing import AsyncIterator, List, Optional
 
 from loguru import logger
 
-from app.core.llm import chat_once, MODEL_REGISTRY
+from app.config import settings
+from app.core.llm import LLM_ERROR_PREFIX, LLM_FAILED_PREFIX, chat_once, MODEL_REGISTRY
+
+
+def _raise_if_llm_error(text: str) -> str:
+    """LLM 调用失败（超时/未配 Key）时立即中止管线，避免带着错误文本继续跑后续阶段。"""
+    t = (text or "").strip()
+    if t.startswith(LLM_ERROR_PREFIX.strip()) or t.startswith(LLM_FAILED_PREFIX.strip()):
+        raise RuntimeError(f"LLM 调用失败: {t}")
+    return text
 from app.core.rag import rag_engine
 from app.core.web_search import format_for_prompt, web_search
 from app.core.demo_provider import planner_for_demo, researcher_for_demo, writer_for_demo
@@ -151,7 +161,7 @@ async def planner_agent(
         custom_providers=custom_providers,
     )
     raw = result["text"] if isinstance(result, dict) else result
-    return _parse_outline(raw, fallback_topic=topic, length=length)
+    return _parse_outline(_raise_if_llm_error(raw), fallback_topic=topic, length=length)
 
 
 def _parse_outline(raw: str, fallback_topic: str, length: str) -> List[OutlineItem]:
@@ -315,7 +325,7 @@ async def researcher_agent(
         user_keys=user_keys,
         custom_providers=custom_providers,
     )
-    notes = result["text"] if isinstance(result, dict) else result
+    notes = _raise_if_llm_error(result["text"] if isinstance(result, dict) else result)
 
     return SectionDraft(
         section_id=item.section_id,
@@ -402,7 +412,7 @@ async def writer_agent(
         user_keys=user_keys,
         custom_providers=custom_providers,
     )
-    article = result["text"] if isinstance(result, dict) else result
+    article = _raise_if_llm_error(result["text"] if isinstance(result, dict) else result)
     return article
 
 
@@ -430,6 +440,7 @@ async def run_writing_pipeline(
     send 是兼容旧 (queue.put) 风格接口的别名。
     """
     # ---- Planner ----
+    t0 = time.monotonic()
     if send:
         send({"event": "planner_start", "topic": topic, "style": style, "length": length})
     outline = await planner_agent(
@@ -437,10 +448,13 @@ async def run_writing_pipeline(
         custom_outline=custom_outline, model=model,
         user_keys=user_keys, custom_providers=custom_providers,
     )
+    t_planner = time.monotonic() - t0
+    logger.info("写作计时 [planner] {:.1f}s (model={}, sections={})", t_planner, model, len(outline))
     if send:
         send({
             "event": "planner_done",
             "outline": [o.__dict__ for o in outline],
+            "elapsed": round(t_planner, 1),
         })
 
     # ---- 并行 Researchers ----
@@ -455,6 +469,8 @@ async def run_writing_pipeline(
         for item in outline
     ]
     sections: List[SectionDraft] = await asyncio.gather(*tasks, return_exceptions=False)
+    t_researchers = time.monotonic() - t0 - t_planner
+    logger.info("写作计时 [researchers] {:.1f}s ({} 个并行)", t_researchers, len(sections))
     if send:
         send({
             "event": "researchers_done",
@@ -462,6 +478,7 @@ async def run_writing_pipeline(
                 {"section_id": s.section_id, "title": s.title, "notes": s.research_notes, "sources": s.sources}
                 for s in sections
             ],
+            "elapsed": round(t_researchers, 1),
         })
 
     # ---- Writer ----
@@ -472,8 +489,11 @@ async def run_writing_pipeline(
         outline=outline, sections=sections, model=model,
         user_keys=user_keys, custom_providers=custom_providers,
     )
+    t_writer = time.monotonic() - t0 - t_planner - t_researchers
+    logger.info("写作计时 [writer] {:.1f}s (总耗时 {:.1f}s)", t_writer, time.monotonic() - t0)
     if send:
-        send({"event": "writer_done", "article": article_md, "word_count": len(article_md)})
+        send({"event": "writer_done", "article": article_md, "word_count": len(article_md),
+              "elapsed": round(t_writer, 1)})
 
     return WritingResult(
         topic=topic, style=style, length=length,
