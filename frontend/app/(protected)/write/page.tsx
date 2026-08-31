@@ -275,7 +275,10 @@ export default function WritePage() {
                 {completedSections}/{state.researchers.length} Researcher ·{' '}
                 {state.writer.status === 'done' ? '✓' : state.writer.status === 'running' ? '⏳' : '○'} Writer
               </span>
-              <span className="font-mono">{Math.round(progress)}%</span>
+              <span className="font-mono">
+                {state.overall === 'running' && state.elapsed != null && `⏱ ${state.elapsed}s · `}
+                {Math.round(progress)}%
+              </span>
             </div>
           </div>
 

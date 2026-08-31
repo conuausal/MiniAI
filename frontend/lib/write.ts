@@ -76,6 +76,7 @@ export interface PipelineState {
   writer: { status: AgentStatus; article: string; wordCount: number };
   // 总状态
   overall: 'idle' | 'running' | 'done' | 'error';
+  elapsed?: number; // 已用时（秒），heartbeat 推送
   error?: string;
 }
 
@@ -202,6 +203,8 @@ function handleEvent(p: any, update: PipelineUpdater) {
       ...s,
       writer: { status: 'done', article: p.article || '', wordCount: p.word_count || 0 },
     }));
+  } else if (ev === 'heartbeat') {
+    update((s) => ({ ...s, elapsed: p.elapsed }));
   } else if (ev === 'done') {
     update((s) => ({ ...s, overall: 'done' }));
   } else if (ev === 'error') {

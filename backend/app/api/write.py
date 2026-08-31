@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from typing import AsyncIterator, Dict, List, Optional
 
@@ -57,6 +58,7 @@ async def write_article(
         raise HTTPException(status_code=400, detail="topic 不能为空")
 
     task_id = uuid.uuid4().hex
+    logger.info("✍️ 写作请求: task={} model={} topic={}", task_id, req.model, req.topic[:40])
     _PROGRESS_STORE[task_id] = []
     _TASK_OWNER[task_id] = user.id
 
@@ -72,6 +74,14 @@ async def write_article(
             _evict_stale_tasks()
 
         yield _sse({"event": "start", "task_id": task_id, "topic": req.topic})
+
+        t0 = time.monotonic()
+
+        async def heartbeat():
+            """每 2 秒推送一次已用时，避免推理模型思考期间前端长时间零反馈。"""
+            while True:
+                await asyncio.sleep(2)
+                queue.put_nowait({"event": "heartbeat", "elapsed": round(time.monotonic() - t0, 1)})
 
         async def runner():
             try:
@@ -90,11 +100,15 @@ async def write_article(
                     send=emit,
                 )
                 emit({"event": "done"})
+            except asyncio.CancelledError:
+                logger.info("写作管线被取消（客户端断开/停止）: task={}", task_id)
+                raise
             except Exception as e:
                 logger.exception("写作管线失败（task={}，model={}）: {}", task_id, req.model, e)
                 emit({"event": "error", "message": str(e)})
 
         task = asyncio.create_task(runner())
+        hb = asyncio.create_task(heartbeat())
 
         try:
             while True:
@@ -103,9 +117,15 @@ async def write_article(
                 if payload.get("event") in {"done", "error"}:
                     break
         finally:
-            if not task.done():
+            hb.cancel()
+            client_gone = not task.done()
+            if client_gone:
                 task.cancel()
             _TASK_OWNER.pop(task_id, None)
+            logger.info(
+                "写作流结束: task={} client_disconnected={} runner_done={} total={:.1f}s",
+                task_id, client_gone, task.done(), time.monotonic() - t0,
+            )
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
