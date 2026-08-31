@@ -157,6 +157,24 @@ function handleEvent(p: any, update: PipelineUpdater) {
         sources: [],
       })),
     }));
+  } else if (ev === 'researcher_done') {
+    // 单个章节调研完成：实时更新该章节状态（不影响其他章节）
+    update((s) => {
+      const idx = s.researchers.findIndex((r) => r.section_id === p.section_id);
+      if (idx < 0) return s;
+      const next = [...s.researchers];
+      if (p.status === 'error') {
+        next[idx] = { ...next[idx], status: 'error' as AgentStatus, notes: p.error || '调研失败' };
+      } else {
+        next[idx] = {
+          ...next[idx],
+          status: 'done' as AgentStatus,
+          notes: p.notes || '',
+          sources: p.sources || [],
+        };
+      }
+      return { ...s, researchers: next };
+    });
   } else if (ev === 'researchers_done') {
     update((s) => {
       const map = new Map((p.sections || []).map((sec: any) => [sec.section_id, sec]));

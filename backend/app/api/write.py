@@ -8,6 +8,7 @@ from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
+from loguru import logger
 
 from app.core.auth import get_current_user
 from app.core.llm import parse_custom_providers, parse_user_keys
@@ -90,6 +91,7 @@ async def write_article(
                 )
                 emit({"event": "done"})
             except Exception as e:
+                logger.exception("写作管线失败（task={}，model={}）: {}", task_id, req.model, e)
                 emit({"event": "error", "message": str(e)})
 
         task = asyncio.create_task(runner())

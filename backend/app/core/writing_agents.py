@@ -321,7 +321,7 @@ async def researcher_agent(
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.4,
-        max_tokens=1500,
+        max_tokens=3000,  # 推理模型（如 MiniMax M3）思考 token 较多，预算太小会被 API 拒绝或截断
         user_keys=user_keys,
         custom_providers=custom_providers,
     )
@@ -469,15 +469,38 @@ async def run_writing_pipeline(
     # ---- 并行 Researchers ----
     if send:
         send({"event": "researchers_start", "count": len(outline)})
-    tasks = [
-        researcher_agent(
-            item=item, topic=topic, model=model,
-            enable_rag=enable_rag, enable_search=enable_search, collection=collection,
-            user_keys=user_keys, custom_providers=custom_providers, user_id=user_id,
-        )
-        for item in outline
-    ]
-    sections: List[SectionDraft] = await asyncio.gather(*tasks, return_exceptions=False)
+
+    async def _research_one(idx: int, item: OutlineItem) -> SectionDraft:
+        """单个章节调研；失败只降级该章节，不拖垮整条管线。"""
+        try:
+            draft = await researcher_agent(
+                item=item, topic=topic, model=model,
+                enable_rag=enable_rag, enable_search=enable_search, collection=collection,
+                user_keys=user_keys, custom_providers=custom_providers, user_id=user_id,
+            )
+            if send:
+                send({
+                    "event": "researcher_done", "section_id": item.section_id,
+                    "title": item.title, "status": "done",
+                    "notes": draft.research_notes, "sources": draft.sources,
+                })
+            return draft
+        except Exception as e:
+            logger.warning("Researcher [{}] 调研失败: {}", item.title, e)
+            if send:
+                send({
+                    "event": "researcher_done", "section_id": item.section_id,
+                    "title": item.title, "status": "error", "error": str(e),
+                })
+            return SectionDraft(
+                section_id=item.section_id, title=item.title,
+                research_notes=f"（本章节调研失败：{e}。撰写时请基于通识展开。）",
+                draft="", sources=[],
+            )
+
+    sections: List[SectionDraft] = await asyncio.gather(
+        *[_research_one(i, item) for i, item in enumerate(outline)]
+    )
     t_researchers = time.monotonic() - t0 - t_planner
     logger.info("写作计时 [researchers] {:.1f}s ({} 个并行)", t_researchers, len(sections))
     if send:
