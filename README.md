@@ -21,13 +21,13 @@
 | 🎭 **内置演示模型** | `miniai-demo` 无需任何 API Key，开箱即可体验聊天、工具调用、多智能体写作全流程 |
 | 📚 **RAG 知识库** | 上传 PDF / DOCX / TXT / Markdown，ChromaDB 向量检索 + 混合检索重排，对话中自动注入上下文 |
 | 🌐 **联网搜索** | 阿里云百炼 DashScope Web Search（未配置时回退 Tavily） |
-| 🔧 **Function Calling** | 5 个内置工具（时间 / 计算 / 搜索 / 知识库 / 读文件）+ 调用过程可视化折叠卡片 |
+| 🔧 **Function Calling** | 5 个内置工具（时间 / 计算 / 搜索 / 知识库 / 读文件）+ 调用过程可视化折叠卡片，工具沙箱化（敏感文件保护 + 计算资源限制） |
 | ✍️ **多智能体写作** | Planner → 并行 Researchers → Writer 流水线，SSE 实时进度 + 文章预览 |
 | 💬 **对话记忆** | MySQL 持久化会话与消息 + Redis 记忆窗口 + 自动标题 |
 | ⚡ **流式输出** | SSE token-by-token |
 | 🎤 **语音交互** | 浏览器原生 Web Speech API（STT + TTS），零成本 |
 | 🏠 **个人工作生活管理** | 9 大模块：总览 / 今日计划 / 自媒体 / 开发 / 咨询 / 健身 / 饮食 / 游戏 / 数据与设置 |
-| 🔐 **多用户账号** | 注册 / 登录（JWT httpOnly Cookie），全站数据按用户隔离 |
+| 🔐 **多用户账号** | 注册 / 登录（JWT httpOnly Cookie），全站数据按用户隔离，登录失败限流 |
 | 🎀 **随机二次元** | 每日随机二次元图片 |
 | 🐳 **一键启动** | Docker Compose 启动全栈（后端 + 前端 + MySQL + Redis） |
 
@@ -198,11 +198,19 @@ MODEL_REGISTRY["my-model"] = {
 
 ## 🔒 部署安全提示
 
+**已内置的安全机制**（v0.10.1）：
+
+- 工具沙箱：`read_file` 拒绝读取 `.env` / 密钥 / 数据库等敏感文件；`calculate` 限制幂指数并带超时，防止资源耗尽
+- 接口鉴权：除注册 / 登录外全部接口需登录；写作任务回放按用户归属校验
+- 登录限流：同用户名 5 次失败 / 5 分钟 → 429（进程内实现，多 worker 部署需换 Redis）
+- 上传限制：知识库文件最大 20MB
+- SSE 稳定性：客户端中断时已生成的回复自动落库，记忆与对话保持一致
+
 若要将站点部署到公网，请务必：
 
 1. **不要把自己的 API Key 填进 `backend/.env`** —— 服务端的 key 会被**所有注册用户**作为兜底使用（消耗你的额度）。部署时建议只保留基础设施配置（`DATABASE_URL` / `REDIS_URL` 等），让每个用户在右上角 🔑 抽屉里自行填 Key。
 2. 设置 `APP_ENV=production` —— 自动关闭 `/docs`、`/redoc`、`/openapi.json` 接口文档；若 `JWT_SECRET` 未改强或 `COOKIE_SECURE` 未开启，后端会**拒绝启动**。
-3. 配置强随机 `JWT_SECRET` 与 `APP_SECRET_KEY`。
+3. 配置强随机 `JWT_SECRET`。
 4. 全程 HTTPS，并设置 `COOKIE_SECURE=True`。
 
 ---
