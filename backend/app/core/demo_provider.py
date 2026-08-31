@@ -120,6 +120,32 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
                     },
                 }
 
+    # 用户自定义（Webhook）工具：用户消息中出现工具名即触发，参数取消息中的 JSON（若有）
+    builtin_names = {
+        "get_current_time", "calculate", "web_search",
+        "query_knowledge", "read_file", "get_random_anime",
+    }
+    for tool in tools:
+        name = tool["function"]["name"]
+        if name in builtin_names:
+            continue
+        if name.lower() in text:
+            args: dict = {}
+            m = re.search(r"\{.*\}", user_text, re.DOTALL)
+            if m:
+                try:
+                    args = json.loads(m.group(0))
+                except Exception:
+                    args = {}
+            return {
+                "id": f"call_{int(datetime.now().timestamp())}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(args, ensure_ascii=False),
+                },
+            }
+
     return None
 
 
@@ -437,18 +463,19 @@ class _DemoResponse:
 
 
 class _DemoChunk:
-    def __init__(self, delta_content: str = "", finish_reason: Optional[str] = None, tool_calls_delta=None):
+    def __init__(self, delta_content: str = "", finish_reason: Optional[str] = None, tool_calls_delta=None, reasoning: str = ""):
         self.choices = [type("C", (), {
             "delta": type("D", (), {
                 "content": delta_content,
                 "tool_calls": tool_calls_delta,
+                "reasoning_content": reasoning,
             })(),
             "finish_reason": finish_reason,
         })()]
 
 
 class _DemoStream:
-    """流式响应：分块 yield 文本 + tool_calls。"""
+    """流式响应：分块 yield 思考(reasoning) + 文本 + tool_calls。"""
 
     def __init__(self, text: str, tool_calls: list, model: str):
         self._text = text
@@ -456,6 +483,18 @@ class _DemoStream:
         self._model = model
 
     async def __aiter__(self):
+        # 发起工具调用前合成"思考过程"，模拟推理模型的 ReAct 链
+        if self._tool_calls:
+            import json as _json
+            names = "、".join(tc["function"]["name"] for tc in self._tool_calls)
+            thought = (
+                f"用户的问题需要外部信息或计算。我先分析意图，"
+                f"决定调用工具：{names}，拿到结果后再组织回答。"
+            )
+            for c in [thought[i:i + 12] for i in range(0, len(thought), 12)]:
+                yield _DemoChunk(reasoning=c)
+                await asyncio.sleep(0.02)
+
         # 流式输出文本（按词分块，更自然）
         # |.+$ 兜底捕获末尾没有分隔符的残段，避免文本被截断
         import re as _re

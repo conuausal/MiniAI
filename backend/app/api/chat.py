@@ -21,6 +21,7 @@ from app.core.memory_window import delete_window, get_window, push_window
 from app.core.rag import rag_engine
 from app.core.tools import execute_tool, list_tools
 from app.core.web_search import format_for_prompt, web_search
+from app.api.preferences import load_user_preferences
 from app.db.database import AsyncSessionLocal, get_session
 from app.models.schemas import ChatRequest
 from app.models.user import User
@@ -51,11 +52,11 @@ def _is_error_text(text: str) -> bool:
     return t.startswith(LLM_ERROR_PREFIX.strip()) or t.startswith(LLM_FAILED_PREFIX.strip())
 
 
-async def _persist_assistant_message(session_id: str, text: str) -> None:
+async def _persist_assistant_message(session_id: str, text: str, extra: dict | None = None) -> None:
     """独立会话持久化助手回复，失败仅告警不影响响应。"""
     try:
         async with AsyncSessionLocal() as session:
-            await MemoryStore(session).append_message(session_id, "assistant", text)
+            await MemoryStore(session).append_message(session_id, "assistant", text, extra=extra)
         await push_window(session_id, "assistant", text)
     except Exception as e:
         logger.warning("助手消息持久化失败（session={}）: {}", session_id, e)
@@ -92,6 +93,7 @@ async def _build_initial_messages(
     session_id: str,
     req: ChatRequest,
     user_id: int = 0,
+    user_system_prompt: str = "",
 ) -> list[dict]:
     """构造发给 LLM 的完整 messages：N 轮记忆窗口 + RAG + 联网。
 
@@ -104,7 +106,14 @@ async def _build_initial_messages(
         full = await store.to_chat_history(session_id, system_prompt=None)
         cap = max(1, int(settings.memory_window_rounds)) * 2
         window = full[-cap:] if full else []
-    history: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(window)
+    history: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # 用户自定义系统提示词：追加为第二条 system 消息，与基础设定叠加
+    if user_system_prompt.strip():
+        history.append({
+            "role": "system",
+            "content": f"以下是本用户自定义的补充系统设定，请严格遵守：\n{user_system_prompt.strip()}",
+        })
+    history += list(window)
 
     # 2) RAG / 联网增强最后一条 user 消息
     last_user = next((m for m in reversed(req.messages) if m.role == "user"), None)
@@ -155,8 +164,21 @@ async def chat_completions(
         await store.append_message(session_id, "user", last_user_text)
         await push_window(session_id, "user", last_user_text)
 
-    full_messages = await _build_initial_messages(store, session_id, req, user.id)
-    tools_schema = list_tools() if req.enable_tools else None
+    user_system_prompt, custom_tools = await load_user_preferences(db, user.id)
+    full_messages = await _build_initial_messages(store, session_id, req, user.id, user_system_prompt)
+    # 工具 schema = 内置 + 用户自定义（Webhook）工具
+    custom_schemas = [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("parameters") or {"type": "object", "properties": {}},
+            },
+        }
+        for t in custom_tools
+    ]
+    tools_schema = (list_tools() + custom_schemas) if req.enable_tools else None
 
     if not req.stream:
         text, _ = await _run_with_tools(
@@ -171,6 +193,7 @@ async def chat_completions(
             user_keys=user_keys,
             custom_providers=custom_providers,
             user_id=user.id,
+            custom_tools=custom_tools,
         )
         if not _is_error_text(text):
             await store.append_message(session_id, "assistant", text)
@@ -179,6 +202,7 @@ async def chat_completions(
 
     async def event_gen() -> AsyncIterator[str]:
         assistant_buf: list[str] = []
+        thinking_buf: list[str] = []
         persisted = False
 
         def _schedule_persist() -> None:
@@ -195,7 +219,9 @@ async def chat_completions(
             if not text or _is_error_text(text):
                 return
             persisted = True
-            asyncio.create_task(_persist_assistant_message(session_id, text))
+            thinking = "".join(thinking_buf)[:20000]
+            extra = {"thinking": thinking} if thinking.strip() else None
+            asyncio.create_task(_persist_assistant_message(session_id, text, extra))
 
         try:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'model': req.model}, ensure_ascii=False)}\n\n"
@@ -206,7 +232,7 @@ async def chat_completions(
                 round_buf: list[str] = []
                 tool_calls_raw: List[dict] = []
 
-                async for delta in stream_chat(
+                async for kind, text in stream_chat(
                     model=req.model,
                     messages=current_messages,
                     temperature=req.temperature,
@@ -215,6 +241,11 @@ async def chat_completions(
                     user_keys=user_keys,
                     custom_providers=custom_providers,
                 ):
+                    if kind == "thinking":
+                        thinking_buf.append(text)
+                        yield f"event: thinking\ndata: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
+                        continue
+                    delta = text
                     if "<<<TOOL_CALLS>>>" in delta:
                         before, _, after = delta.partition("<<<TOOL_CALLS>>>")
                         json_part, _, _ = after.partition("<<<END>>>")
@@ -245,7 +276,7 @@ async def chat_completions(
                         args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
                     except Exception:
                         args = {}
-                    result = await execute_tool(name, args, user_id=user.id)
+                    result = await execute_tool(name, args, user_id=user.id, custom_tools=custom_tools)
                     yield f"event: tool_result\ndata: {json.dumps({'name': name, 'args': args, 'result': result[:4000]}, ensure_ascii=False)}\n\n"
                     tool_msgs.append({
                         "role": "tool",
@@ -261,7 +292,7 @@ async def chat_completions(
 
             # 工具轮耗尽后补一轮无工具的收敛回答（与非流式 _run_with_tools 的兜底一致）
             if last_round_had_tool_calls:
-                async for delta in stream_chat(
+                async for kind, text in stream_chat(
                     model=req.model,
                     messages=current_messages,
                     temperature=req.temperature,
@@ -270,8 +301,12 @@ async def chat_completions(
                     user_keys=user_keys,
                     custom_providers=custom_providers,
                 ):
-                    assistant_buf.append(delta)
-                    yield f"event: delta\ndata: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
+                    if kind == "thinking":
+                        thinking_buf.append(text)
+                        yield f"event: thinking\ndata: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
+                        continue
+                    assistant_buf.append(text)
+                    yield f"event: delta\ndata: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
 
             _schedule_persist()
             yield f"event: done\ndata: {json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
@@ -298,6 +333,7 @@ async def _run_with_tools(
     user_keys: dict,
     custom_providers: dict,
     user_id: int = 0,
+    custom_tools: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
     current = list(messages)
     all_records: list[dict] = []
@@ -317,7 +353,7 @@ async def _run_with_tools(
                 args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
             except Exception:
                 args = {}
-            tool_result = await execute_tool(name, args, user_id=user_id)
+            tool_result = await execute_tool(name, args, user_id=user_id, custom_tools=custom_tools)
             all_records.append({"name": name, "args": args, "result": tool_result})
             tool_msgs.append({
                 "role": "tool",
@@ -349,7 +385,12 @@ async def list_session_messages(
     return {
         "session_id": session_id,
         "messages": [
-            {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "role": m.role,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+                "thinking": (m.extra or {}).get("thinking"),
+            }
             for m in msgs
         ],
     }

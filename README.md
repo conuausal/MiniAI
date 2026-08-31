@@ -22,6 +22,9 @@
 | 📚 **RAG 知识库** | 上传 PDF / DOCX / TXT / Markdown，ChromaDB 向量检索 + 混合检索重排，对话中自动注入上下文 |
 | 🌐 **联网搜索** | 阿里云百炼 DashScope Web Search（未配置时回退 Tavily） |
 | 🔧 **Function Calling** | 5 个内置工具（时间 / 计算 / 搜索 / 知识库 / 读文件）+ 调用过程可视化折叠卡片，工具沙箱化（敏感文件保护 + 计算资源限制） |
+| 💭 **思考过程可视化** | 推理模型（DeepSeek-R1 / GLM / M3 等）的思考链实时流式展示，折叠卡片 + 打字机效果 |
+| 💡 **主动建议** | 每轮对话后基于上下文智能推荐追问（识别代码 → 解释/优化/找 bug，报错 → 分析，长文 → 总结） |
+| 🎨 **个性化定制** | 自定义系统提示词（随账号多设备同步）+ HTTP Webhook 专属工具（设置页可视化配置） |
 | ✍️ **多智能体写作** | Planner → 并行 Researchers → Writer 流水线，SSE 实时进度 + 文章预览 |
 | 💬 **对话记忆** | MySQL 持久化会话与消息 + Redis 记忆窗口 + 自动标题 |
 | ⚡ **流式输出** | SSE token-by-token |
@@ -212,6 +215,7 @@ MODEL_REGISTRY["my-model"] = {
 2. 设置 `APP_ENV=production` —— 自动关闭 `/docs`、`/redoc`、`/openapi.json` 接口文档；若 `JWT_SECRET` 未改强或 `COOKIE_SECURE` 未开启，后端会**拒绝启动**。
 3. 配置强随机 `JWT_SECRET`。
 4. 全程 HTTPS，并设置 `COOKIE_SECURE=True`。
+5. **Webhook 自定义工具**由各用户自行配置 URL（后端会向其发起 POST），自部署场景请知悉由此带来的 SSRF 暴露面，必要时在网络层限制后端出站目标。
 
 ---
 

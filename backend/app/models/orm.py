@@ -53,3 +53,18 @@ class KnowledgeDoc(Base):
     chunks: Mapped[int] = mapped_column(Integer, default=0)
     collection: Mapped[str] = mapped_column(String(64), default="default")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserPreference(Base):
+    """用户个性化偏好：自定义系统提示词 + Webhook 自定义工具。"""
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    system_prompt: Mapped[str] = mapped_column(Text, default="")
+    custom_tools: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

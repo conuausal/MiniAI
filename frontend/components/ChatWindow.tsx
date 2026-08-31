@@ -1,12 +1,13 @@
 ﻿﻿'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '@/lib/store';
 import { streamChat, ChatMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
 import ToolCallCard from './ToolCallCard';
 import VoiceInputButton from './VoiceInputButton';
 import { useUserKeys } from '@/lib/user-keys';
+import { getContextSuggestions } from '@/lib/suggestions';
 import { speak, stopSpeaking, getVoiceCapability } from '@/lib/voice';
 
 const SUGGESTIONS = [
@@ -22,12 +23,12 @@ const isAbortError = (e: any) =>
 
 export default function ChatWindow() {
   const {
-    messages, toolRecords, currentModel, currentSessionId,
+    messages, toolRecords, thinking, currentModel, currentSessionId,
     enableRag, enableSearch, enableTools,
     enableVoiceInput, enableVoiceOutput,
     streaming, setStreaming, setAbortCtl, abortCtl,
     appendMessage, setMessages, setCurrentSession,
-    appendToolRecord,
+    appendToolRecord, appendThinking,
   } = useChatStore();
   const { hasAny } = useUserKeys();
   const [input, setInput] = useState('');
@@ -35,6 +36,9 @@ export default function ChatWindow() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ttsSupported = getVoiceCapability().tts;
   const lastSpokenIdxRef = useRef<number>(-1);
+  // 打字机平滑：delta 先进缓冲区，rAF 每帧按比例追赶（快到达时一次刷完）
+  const deltaBufRef = useRef('');
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -68,6 +72,44 @@ export default function ChatWindow() {
     stopSpeaking();
   };
 
+  /** 把缓冲区里的 delta 追加到最后一条助手消息（force=true 时一次刷完）。 */
+  const flushDelta = (force = false) => {
+    const buf = deltaBufRef.current;
+    if (!buf) return;
+    const take = force ? buf.length : Math.max(1, Math.ceil(buf.length / 8));
+    const chunk = buf.slice(0, take);
+    deltaBufRef.current = buf.slice(take);
+    const all = useChatStore.getState().messages;
+    const next = [...all];
+    const lastIdx = next.length - 1;
+    next[lastIdx] = { ...next[lastIdx], content: (next[lastIdx].content || '') + chunk };
+    setMessages(next);
+  };
+
+  const flushTick = () => {
+    flushDelta();
+    if (deltaBufRef.current) {
+      rafRef.current = requestAnimationFrame(flushTick);
+    } else {
+      rafRef.current = null;
+    }
+  };
+
+  const queueDelta = (delta: string) => {
+    deltaBufRef.current += delta;
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(flushTick);
+    }
+  };
+
+  const finishTypewriter = () => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    flushDelta(true);
+  };
+
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
     if (!text || streaming) return;
@@ -99,11 +141,11 @@ export default function ChatWindow() {
         {
           onMeta: ({ session_id }) => setCurrentSession(session_id),
           onDelta: (delta) => {
-            const all = useChatStore.getState().messages;
-            const next = [...all];
-            const lastIdx = next.length - 1;
-            next[lastIdx] = { ...next[lastIdx], content: (next[lastIdx].content || '') + delta };
-            setMessages(next);
+            // 打字机平滑：先入缓冲，rAF 逐帧上屏
+            queueDelta(delta);
+          },
+          onThinking: (delta) => {
+            appendThinking(assistantIdx, delta);
           },
           onToolCall: ({ tool_calls }) => {
             for (const tc of tool_calls) {
@@ -133,12 +175,13 @@ export default function ChatWindow() {
             next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${msg}` };
             setMessages(next);
           },
-          onDone: () => { setStreaming(false); setAbortCtl(null); },
+          onDone: () => { finishTypewriter(); setStreaming(false); setAbortCtl(null); },
         },
         ctl.signal,
       );
     } catch (e: any) {
       // 用户主动中止：保留已生成的部分内容即可，静默结束
+      finishTypewriter();
       if (!isAbortError(e)) {
         const all = useChatStore.getState().messages;
         const next = [...all];
@@ -147,9 +190,19 @@ export default function ChatWindow() {
       }
     }
 
+    finishTypewriter();
     setStreaming(false);
     setAbortCtl(null);
   };
+
+  // 主动建议：流式结束后基于最后一条 user/assistant 消息生成 chips
+  const suggestions = useMemo(() => {
+    if (streaming || messages.length === 0) return [];
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant' || !last.content) return [];
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+    return getContextSuggestions(lastUser, last.content);
+  }, [streaming, messages]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -165,17 +218,26 @@ export default function ChatWindow() {
           <WelcomeScreen hasKey={hasAny} onPick={(t) => send(t)} />
         ) : (
           <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-            {messages.map((m, i) => (
-              <div key={i} className="animate-fade-in">
-                <MessageBubble message={m} />
-                {m.role === 'assistant' && toolRecords[i] && toolRecords[i].length > 0 && (
-                  <div className="flex justify-start mt-2">
-                    <ToolCallCard records={toolRecords[i]} />
-                  </div>
-                )}
-              </div>
-            ))}
-            {streaming && messages[messages.length - 1]?.content === '' && (
+            {messages.map((m, i) => {
+              const isLast = i === messages.length - 1;
+              const liveThinking = isLast && streaming && !!thinking[i] && !m.content;
+              return (
+                <div key={i} className="animate-fade-in">
+                  <MessageBubble
+                    message={m}
+                    thinking={thinking[i] ?? m.thinking ?? ''}
+                    thinkingLive={liveThinking}
+                    showCursor={isLast && streaming && m.role === 'assistant'}
+                  />
+                  {m.role === 'assistant' && toolRecords[i] && toolRecords[i].length > 0 && (
+                    <div className="flex justify-start mt-2">
+                      <ToolCallCard records={toolRecords[i]} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {streaming && messages[messages.length - 1]?.content === '' && !thinking[messages.length - 1] && (
               <div className="flex items-center gap-2 text-xs text-text-mute animate-fade-in pl-1">
                 <span className="flex gap-1">
                   <span className="w-1.5 h-1.5 bg-primary rounded-full animate-blink" style={{ animationDelay: '0ms' }} />
@@ -191,6 +253,21 @@ export default function ChatWindow() {
 
       <div className="border-t border-border-soft bg-surface/40 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-6 py-4">
+          {/* 主动建议 chips */}
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3 animate-fade-in">
+              {suggestions.map((s) => (
+                <button
+                  key={s.label}
+                  onClick={() => send(s.prompt)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-surface/70 text-xs text-text-soft hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all"
+                >
+                  <span>{s.icon}</span>
+                  <span>{s.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="relative glass rounded-2xl focus-within:shadow-soft-md focus-within:border-primary/50 transition-all">
             <textarea
               ref={textareaRef}

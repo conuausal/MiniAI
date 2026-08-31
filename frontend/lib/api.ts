@@ -10,6 +10,17 @@ export interface ChatMessage {
   name?: string | null;
   tool_calls?: any[] | null;
   tool_call_id?: string | null;
+  thinking?: string | null; // 思考过程（推理模型 / demo 合成），仅 assistant 消息
+}
+
+export interface UserPreferences {
+  system_prompt: string;
+  custom_tools: Array<{
+    name: string;
+    description: string;
+    url: string;
+    parameters: Record<string, any>;
+  }>;
 }
 
 export interface ModelInfo { id: string; label: string; provider: string; enabled: boolean; tags?: string[]; }
@@ -79,6 +90,10 @@ export const api = {
 
   listTools: () => jsonFetch<{ tools: ToolInfo[] }>('/api/tools'),
 
+  getPreferences: () => jsonFetch<UserPreferences>('/api/preferences'),
+  savePreferences: (prefs: UserPreferences) =>
+    jsonFetch<UserPreferences>('/api/preferences', { method: 'PUT', body: JSON.stringify(prefs) }),
+
   randomAnime: () => jsonFetch<{ url: string }>('/api/anime/random'),
 };
 
@@ -87,6 +102,7 @@ export const api = {
 export interface ChatStreamHandlers {
   onMeta?: (data: { session_id: string; model: string }) => void;
   onDelta?: (delta: string) => void;
+  onThinking?: (delta: string) => void; // 推理模型思考过程（逐块）
   onToolCall?: (data: { round: number; tool_calls: any[] }) => void;
   onToolResult?: (data: { name: string; args: Record<string, any>; result: string }) => void;
   onDone?: (session_id: string) => void;
@@ -140,6 +156,7 @@ export async function streamChat(
         const data = JSON.parse(dataLines.join('\n'));
         if (event === 'meta') handlers.onMeta?.(data);
         else if (event === 'delta') handlers.onDelta?.(data.content ?? '');
+        else if (event === 'thinking') handlers.onThinking?.(data.content ?? '');
         else if (event === 'tool_call') handlers.onToolCall?.(data);
         else if (event === 'tool_result') handlers.onToolResult?.(data);
         else if (event === 'done') handlers.onDone?.(data.session_id);

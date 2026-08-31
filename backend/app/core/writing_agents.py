@@ -411,7 +411,7 @@ async def writer_agent(
         {"role": "user", "content": user_prompt},
     ]
     chunks: List[str] = []
-    async for delta in stream_chat(
+    async for kind, text in stream_chat(
         model=model,
         messages=messages,
         temperature=0.7,
@@ -419,9 +419,11 @@ async def writer_agent(
         user_keys=user_keys,
         custom_providers=custom_providers,
     ):
-        chunks.append(delta)
+        if kind != "delta":
+            continue
+        chunks.append(text)
         if send:
-            send({"event": "writer_delta", "text": delta})
+            send({"event": "writer_delta", "text": text})
     return _raise_if_llm_error("".join(chunks))
 
 

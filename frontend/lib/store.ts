@@ -9,6 +9,7 @@ interface ChatState {
   currentSessionId: string | null;
   messages: ChatMessage[];
   toolRecords: Record<number, ToolCallRecord[]>;
+  thinking: Record<number, string>; // 每条助手消息的思考过程（实时流式累积）
   // 模型
   models: ModelInfo[];
   currentModel: string;
@@ -39,6 +40,7 @@ interface ChatState {
   setAbortCtl: (c: AbortController | null) => void;
   resetMessages: () => void;
   appendToolRecord: (msgIdx: number, rec: ToolCallRecord) => void;
+  appendThinking: (msgIdx: number, delta: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -46,6 +48,7 @@ export const useChatStore = create<ChatState>((set) => ({
   currentSessionId: null,
   messages: [],
   toolRecords: {},
+  thinking: {},
   models: [],
   currentModel: 'miniai-demo',
   enableRag: false,
@@ -61,7 +64,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setModels: (models) => set({ models }),
   setCurrentModel: (currentModel) => set({ currentModel }),
   setCurrentSession: (currentSessionId) => set({ currentSessionId }),
-  setMessages: (messages) => set({ messages, toolRecords: {} }),
+  setMessages: (messages) => set({ messages, toolRecords: {}, thinking: {} }),
   appendMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
   setEnableRag: (enableRag) => set({ enableRag }),
   setEnableSearch: (enableSearch) => set({ enableSearch }),
@@ -70,9 +73,13 @@ export const useChatStore = create<ChatState>((set) => ({
   setEnableVoiceOutput: (enableVoiceOutput) => set({ enableVoiceOutput }),
   setStreaming: (streaming) => set({ streaming }),
   setAbortCtl: (abortCtl) => set({ abortCtl }),
-  resetMessages: () => set({ messages: [], toolRecords: {}, currentSessionId: null }),
+  resetMessages: () => set({ messages: [], toolRecords: {}, thinking: {}, currentSessionId: null }),
   appendToolRecord: (msgIdx, rec) =>
     set((s) => ({
       toolRecords: { ...s.toolRecords, [msgIdx]: [...(s.toolRecords[msgIdx] || []), rec] },
+    })),
+  appendThinking: (msgIdx, delta) =>
+    set((s) => ({
+      thinking: { ...s.thinking, [msgIdx]: (s.thinking[msgIdx] || '') + delta },
     })),
 }));

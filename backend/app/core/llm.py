@@ -295,11 +295,16 @@ async def stream_chat(
     tools: Optional[List[dict]] = None,
     user_keys: Optional[Dict[str, str]] = None,
     custom_providers: Optional[Dict[str, dict]] = None,
-) -> AsyncIterator[str]:
-    """流式输出 token（带 function calling 检测）。"""
+) -> AsyncIterator[tuple]:
+    """流式输出（带 function calling 检测）。
+
+    产出元组：
+      ("delta", text)    —— 正文 token
+      ("thinking", text) —— 推理模型的思考过程（delta.reasoning_content），普通模型无此项
+    """
     client = get_client(model, user_keys, custom_providers)
     if not client:
-        yield f"{LLM_ERROR_PREFIX}模型 {model} 未配置 API Key。请在右上角 🔑 中填入对应 provider 的 Key。"
+        yield ("delta", f"{LLM_ERROR_PREFIX}模型 {model} 未配置 API Key。请在右上角 🔑 中填入对应 provider 的 Key。")
         return
 
     kwargs: dict = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, stream=True)
@@ -316,8 +321,16 @@ async def stream_chat(
             choice = chunk.choices[0]
             delta = choice.delta
 
+            # 推理模型思考内容（DeepSeek-R1 / GLM / MiniMax M3 等走 reasoning_content 字段）
+            if isinstance(delta, dict):
+                reasoning = delta.get("reasoning_content")
+            else:
+                reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+            if reasoning:
+                yield ("thinking", reasoning)
+
             if delta.content:
-                yield delta.content
+                yield ("delta", delta.content)
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -343,11 +356,11 @@ async def stream_chat(
 
             if choice.finish_reason == "tool_calls" and tool_calls_acc:
                 payload = [tool_calls_acc[k] for k in sorted(tool_calls_acc.keys())]
-                yield f"\n\n<<<TOOL_CALLS>>>{json.dumps(payload, ensure_ascii=False)}<<<END>>>"
+                yield ("delta", f"\n\n<<<TOOL_CALLS>>>{json.dumps(payload, ensure_ascii=False)}<<<END>>>")
                 break
     except Exception as e:
         logger.exception("LLM 调用失败: {}", e)
-        yield f"\n\n{LLM_FAILED_PREFIX}{type(e).__name__}: {e}"
+        yield ("delta", f"\n\n{LLM_FAILED_PREFIX}{type(e).__name__}: {e}")
 
 
 async def chat_once(

@@ -6,11 +6,18 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import clsx from 'clsx';
 import type { ChatMessage } from '@/lib/api';
+import ThinkingCard from './ThinkingCard';
 
-interface Props { message: ChatMessage; }
+interface Props {
+  message: ChatMessage;
+  thinking?: string;      // 实时思考过程（覆盖 message.thinking）
+  thinkingLive?: boolean; // 思考过程正在流式生成
+  showCursor?: boolean;   // 流式中的最后一条消息，尾部闪烁光标
+}
 
-export default function MessageBubble({ message }: Props) {
+export default function MessageBubble({ message, thinking, thinkingLive = false, showCursor = false }: Props) {
   const isUser = message.role === 'user';
+  const thinkingText = thinking ?? message.thinking ?? '';
 
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -32,7 +39,10 @@ export default function MessageBubble({ message }: Props) {
             MiniAI
           </div>
         )}
-        {message.content && (
+        {!isUser && thinkingText && (
+          <ThinkingCard thinking={thinkingText} live={thinkingLive} />
+        )}
+        {(message.content || showCursor) && (
           <div className={clsx(
             'prose prose-sm max-w-none leading-relaxed',
             isUser ? 'prose-invert' : 'dark:prose-invert'
@@ -57,6 +67,7 @@ export default function MessageBubble({ message }: Props) {
             >
               {message.content}
             </ReactMarkdown>
+            {showCursor && <span className="inline-block w-2 h-4 align-text-bottom bg-primary animate-pulse rounded-sm" />}
           </div>
         )}
       </div>

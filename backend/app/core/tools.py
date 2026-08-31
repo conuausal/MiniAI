@@ -16,7 +16,7 @@ import operator
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -320,10 +320,39 @@ def get_tool_names() -> List[str]:
     return list(_REGISTRY.keys())
 
 
-async def execute_tool(name: str, arguments: Dict[str, Any], user_id: int = 0) -> str:
-    """执行指定工具，返回字符串结果。user_id 透传给需要用户上下文的工具（如 RAG）。"""
+async def _call_webhook_tool(tool: Dict[str, Any], arguments: Dict[str, Any]) -> str:
+    """执行用户的 Webhook 自定义工具：POST {url}，body={name, arguments}。"""
+    import httpx
+
+    url = tool.get("url", "")
+    if not re.fullmatch(r"https?://[^\s]+", url):
+        return f"错误：工具 {tool.get('name')} 的 URL 不合法"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+            resp = await client.post(url, json={"name": tool.get("name"), "arguments": arguments})
+        if resp.status_code >= 400:
+            return f"错误：Webhook 返回 HTTP {resp.status_code}: {resp.text[:500]}"
+        return resp.text[:65536] or "（Webhook 返回空内容）"
+    except Exception as e:
+        return f"错误：Webhook 调用失败: {type(e).__name__}: {e}"
+
+
+async def execute_tool(
+    name: str,
+    arguments: Dict[str, Any],
+    user_id: int = 0,
+    custom_tools: Optional[List[dict]] = None,
+) -> str:
+    """执行指定工具，返回字符串结果。user_id 透传给需要用户上下文的工具（如 RAG）。
+
+    custom_tools：用户的 Webhook 自定义工具列表（{name, url, ...}），
+    未命中内置 registry 时按 name 匹配执行。
+    """
     tool = _REGISTRY.get(name)
     if not tool:
+        for ct in (custom_tools or []):
+            if ct.get("name") == name:
+                return await _call_webhook_tool(ct, arguments or {})
         return f"错误：未知工具 {name}"
     try:
         # 过滤掉模型可能传入的非法键
