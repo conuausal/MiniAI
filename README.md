@@ -196,6 +196,17 @@ MODEL_REGISTRY["my-model"] = {
 
 ---
 
+## 🔒 部署安全提示
+
+若要将站点部署到公网，请务必：
+
+1. **不要把自己的 API Key 填进 `backend/.env`** —— 服务端的 key 会被**所有注册用户**作为兜底使用（消耗你的额度）。部署时建议只保留基础设施配置（`DATABASE_URL` / `REDIS_URL` 等），让每个用户在右上角 🔑 抽屉里自行填 Key。
+2. 设置 `APP_ENV=production` —— 自动关闭 `/docs`、`/redoc`、`/openapi.json` 接口文档；若 `JWT_SECRET` 未改强或 `COOKIE_SECURE` 未开启，后端会**拒绝启动**。
+3. 配置强随机 `JWT_SECRET` 与 `APP_SECRET_KEY`。
+4. 全程 HTTPS，并设置 `COOKIE_SECURE=True`。
+
+---
+
 ## 🗺️ 规划中
 
 - [ ] 找回密码

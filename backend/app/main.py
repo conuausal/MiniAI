@@ -23,11 +23,17 @@ async def lifespan(_: FastAPI):
     logger.info("👋 MiniAI 已关闭")
 
 
+# 生产环境关闭 API 文档，避免暴露接口清单
+IS_PRODUCTION = settings.app_env.strip().lower() == "production"
+
 app = FastAPI(
     title="MiniAI API",
     description="开源的个人 AI 助手：多模型 + RAG + 联网搜索 + 工具调用 + 多智能体写作 + 对话记忆",
     version="0.10.0",
     lifespan=lifespan,
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 
 app.add_middleware(

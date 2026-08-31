@@ -2,6 +2,7 @@
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -68,6 +69,26 @@ class Settings(BaseSettings):
     dashscope_api_key: str = ""
 
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @model_validator(mode="after")
+    def _production_guard(self) -> "Settings":
+        """生产环境安全守卫：拒绝默认密钥、强制 HTTPS Cookie（否则拒绝启动）。
+
+        仅在 APP_ENV=production 时生效；本地开发不受影响。
+        详见 README「🔒 部署安全提示」。
+        """
+        if self.app_env.strip().lower() != "production":
+            return self
+        problems: list[str] = []
+        if self.jwt_secret == "change-me-to-a-long-random-string":
+            problems.append("JWT_SECRET 仍是默认值，请设置为强随机密钥")
+        if not self.cookie_secure:
+            problems.append("COOKIE_SECURE 必须为 True（生产环境需 HTTPS）")
+        if problems:
+            raise ValueError(
+                "生产环境安全配置不完整，拒绝启动：\n- " + "\n- ".join(problems)
+            )
+        return self
 
 
 @lru_cache
