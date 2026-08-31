@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 
 interface Props {
@@ -11,13 +11,19 @@ interface Props {
 /** 思考过程折叠卡片（紫色系，展示推理模型的 ReAct/推理链）。 */
 export default function ThinkingCard({ thinking, live = false }: Props) {
   const [open, setOpen] = useState(false);
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  const startRef = useRef<number | null>(null);
 
-  // 流式开始时自动展开，结束后收起
   useEffect(() => {
-    if (live) setOpen(true);
-  }, [live]);
-  useEffect(() => {
-    if (!live) setOpen(false);
+    if (live) {
+      // 流式开始：自动展开并开始计时
+      if (startRef.current == null) startRef.current = Date.now();
+      setOpen(true);
+    } else if (startRef.current != null) {
+      // 思考结束：保持展开供用户查看，记录用时；只有用户手动点击才收起
+      setElapsed(Math.round((Date.now() - startRef.current) / 1000));
+      startRef.current = null;
+    }
   }, [live]);
 
   if (!thinking) return null;
@@ -32,6 +38,9 @@ export default function ThinkingCard({ thinking, live = false }: Props) {
           <div className="flex items-center gap-2 text-xs text-violet-900 dark:text-violet-100">
             <span>💭</span>
             <span className="font-medium">{live ? '思考中…' : '思考过程'}</span>
+            {elapsed != null && !live && (
+              <span className="text-violet-600/70 dark:text-violet-300/70">· {elapsed}s</span>
+            )}
             {live && (
               <span className="flex gap-0.5">
                 <span className="w-1 h-1 rounded-full bg-violet-400 animate-pulse" />
@@ -58,3 +67,4 @@ export default function ThinkingCard({ thinking, live = false }: Props) {
     </div>
   );
 }
+
