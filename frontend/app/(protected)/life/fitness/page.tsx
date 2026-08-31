@@ -125,7 +125,8 @@ export default function FitnessPage() {
         )}
 
         {metrics.length === 0 ? <div className="text-sm text-text-mute text-center py-4">暂无身体数据</div> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-text-mute border-b border-border-soft"><th className="py-1.5">日期</th><th className="text-right">体重(kg)</th><th className="text-right">体脂(%)</th><th></th></tr></thead>
             <tbody>
               {metrics.map((m) => (
@@ -137,7 +138,8 @@ export default function FitnessPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </section>
     </div>

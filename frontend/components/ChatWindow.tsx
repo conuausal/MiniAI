@@ -287,7 +287,7 @@ function WelcomeScreen({ hasKey, onPick }: { hasKey: boolean; onPick: (t: string
         </div>
 
         {/* 底部展示区 */}
-        <div className="mt-12 flex items-center justify-center gap-6 text-[11px] text-text-mute">
+        <div className="mt-12 flex items-center justify-center gap-x-4 gap-y-2 flex-wrap text-[11px] text-text-mute">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-accent-mint rounded-full" />
             25+ 模型

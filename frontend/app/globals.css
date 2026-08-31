@@ -127,6 +127,10 @@ h1, h2, h3 { font-family: var(--font-serif); letter-spacing: -0.02em; }
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
+@keyframes drawer-in-left {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
 @keyframes aurora {
   0%, 100% { background-position: 0% 50%; }
   50%      { background-position: 100% 50%; }
@@ -146,6 +150,7 @@ h1, h2, h3 { font-family: var(--font-serif); letter-spacing: -0.02em; }
 .animate-blink     { animation: blink 1.2s ease-in-out infinite; }
 .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
 .animate-drawer-in { animation: drawer-in 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-drawer-in-left { animation: drawer-in-left 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 .animate-aurora    { background-size: 200% 200%; animation: aurora 8s ease infinite; }
 .animate-float     { animation: float 4s ease-in-out infinite; }
 

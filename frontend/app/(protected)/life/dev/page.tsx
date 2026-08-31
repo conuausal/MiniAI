@@ -76,9 +76,9 @@ export default function DevPage() {
   const sel = projects.find((p) => p.id === selId);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col lg:flex-row">
       {/* 项目列表 */}
-      <aside className="w-60 shrink-0 border-r border-border-soft p-4 space-y-3 overflow-y-auto">
+      <aside className="w-full lg:w-60 shrink-0 border-b lg:border-b-0 lg:border-r border-border-soft p-4 space-y-3 overflow-y-auto max-h-[40vh] lg:max-h-none">
         <div className="flex items-center gap-2">
           <span className="text-xl">💻</span>
           <h1 className="font-serif font-semibold text-hero">开发工作</h1>
@@ -105,7 +105,7 @@ export default function DevPage() {
       </aside>
 
       {/* 项目详情 */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6">
         {!sel ? (
           <div className="text-center text-text-mute py-24">
             <div className="text-4xl mb-3">💻</div>
@@ -172,8 +172,8 @@ export default function DevPage() {
 
             {tab === 'notes' && (
               <div className="glass-card rounded-2xl p-4 space-y-3 animate-fade-in">
-                <div className="flex gap-2">
-                  <input value={nTitle} onChange={(e) => setNTitle(e.target.value)} placeholder="笔记标题" className="w-48 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
+                <div className="flex flex-wrap gap-2">
+                  <input value={nTitle} onChange={(e) => setNTitle(e.target.value)} placeholder="笔记标题" className="w-full lg:w-48 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
                   <input value={nContent} onChange={(e) => setNContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNote()} placeholder="内容（可选）" className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
                   <button onClick={addNote} disabled={!nTitle.trim()} className="btn btn-primary !py-1.5 text-xs">记录</button>
                 </div>

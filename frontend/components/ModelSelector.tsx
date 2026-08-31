@@ -66,17 +66,16 @@ function ModelPicker({
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number; minWidth: number }>({ top: 0, right: 0, minWidth: 280 });
+  const [pos, setPos] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 280 });
 
-  // 计算弹出位置（基于按钮的 bounding rect）
+  // 计算弹出位置：右对齐按钮，并夹紧在视口内（避免移动端溢出屏幕）
   const recompute = () => {
     if (!buttonRef.current) return;
     const r = buttonRef.current.getBoundingClientRect();
-    setPos({
-      top: r.bottom + 6,
-      right: window.innerWidth - r.right,
-      minWidth: Math.max(280, r.width),
-    });
+    const vw = window.innerWidth;
+    const w = Math.min(Math.max(280, r.width), vw - 16);   // 视口内最大宽度
+    const left = Math.min(Math.max(8, r.right - w), vw - w - 8); // 右对齐 + 夹紧
+    setPos({ top: r.bottom + 6, left, minWidth: w });
   };
 
   useEffect(() => {
@@ -112,7 +111,7 @@ function ModelPicker({
         ref={buttonRef}
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="text-sm pl-3 pr-7 py-1.5 rounded-lg border border-border bg-surface/80 backdrop-blur hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 min-w-[180px] justify-between"
+        className="text-sm pl-3 pr-7 py-1.5 rounded-lg border border-border bg-surface/80 backdrop-blur hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 min-w-0 md:min-w-[180px] justify-between"
       >
         <span className="truncate flex items-center gap-1.5">
           {providerEmoji && <span>{providerEmoji}</span>}
@@ -124,7 +123,7 @@ function ModelPicker({
       {open && (
         <div
           ref={popRef}
-          style={{ top: pos.top, right: pos.right, minWidth: pos.minWidth }}
+          style={{ top: pos.top, left: pos.left, minWidth: pos.minWidth, maxWidth: 'calc(100vw - 16px)' }}
           className="fixed z-[9999] max-h-[70vh] overflow-y-auto glass-strong rounded-xl shadow-xl border border-border animate-slide-down"
         >
           {enabledGroups.size === 0 ? (

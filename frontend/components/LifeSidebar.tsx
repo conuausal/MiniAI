@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import { life } from '@/lib/life';
 
-const MODULES = [
+export const LIFE_MODULES = [
   { href: '/life', label: '总览', emoji: '🏠', key: 'home' },
   { href: '/life/todos', label: '今日计划', emoji: '✅', key: 'todos' },
   { href: '/life/media', label: '自媒体', emoji: '📣', key: 'media' },
@@ -18,11 +18,13 @@ const MODULES = [
   { href: '/life/settings', label: '数据与设置', emoji: '⚙️', key: 'settings' },
 ];
 
-export default function LifeSidebar() {
+/**
+ * 读取模块开关，返回"已启用"的模块列表（桌面侧栏与移动抽屉共用）。
+ */
+export function useLifeModules() {
   const pathname = usePathname();
   const [disabled, setDisabled] = useState<Set<string>>(new Set());
 
-  // 读取模块开关，隐藏被关闭的模块
   useEffect(() => {
     life.getSettings()
       .then((s) => {
@@ -33,10 +35,14 @@ export default function LifeSidebar() {
       .catch(() => {});
   }, []);
 
-  const items = MODULES.filter((m) => !disabled.has(m.key));
+  return { items: LIFE_MODULES.filter((m) => !disabled.has(m.key)), pathname };
+}
+
+export default function LifeSidebar() {
+  const { items, pathname } = useLifeModules();
 
   return (
-    <aside className="w-52 shrink-0 border-r border-border bg-surface/50 backdrop-blur-md flex flex-col overflow-y-auto">
+    <aside className="hidden lg:flex w-52 shrink-0 border-r border-border bg-surface/50 backdrop-blur-md flex-col overflow-y-auto">
       <div className="px-4 pt-4 pb-2 text-[11px] font-semibold text-text-mute uppercase tracking-wider">我的生活</div>
       <nav className="flex-1 px-2 pb-3 space-y-0.5">
         {items.map((m) => {

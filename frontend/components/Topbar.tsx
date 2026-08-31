@@ -8,6 +8,7 @@ import { useChatStore } from '@/lib/store';
 import { useDarkMode } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
 import ApiKeyDrawer from './ApiKeyDrawer';
+import MobileNav from './MobileNav';
 import ModelSelector from './ModelSelector';
 
 export default function Topbar() {
@@ -18,6 +19,7 @@ export default function Topbar() {
   const { enableVoiceOutput, setEnableVoiceOutput, enableVoiceInput, setEnableVoiceInput } = useChatStore();
   const { isDark, toggle } = useDarkMode();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   // 仅在对话页（/）显示模型选择器
   const showModelSelector = pathname === '/';
@@ -34,8 +36,18 @@ export default function Topbar() {
     <>
       <header className="sticky top-0 z-40">
         <div className="glass-strong h-14 px-4 flex items-center gap-4">
-          {/* 左：Logo + 导航 */}
-          <div className="flex items-center gap-6 shrink-0">
+          {/* 左：汉堡 + Logo + 导航 */}
+          <div className="flex items-center gap-2 lg:gap-6 shrink-0">
+            <button
+              onClick={() => setNavOpen(true)}
+              className="lg:hidden btn btn-ghost !p-2 rounded-lg"
+              aria-label="打开菜单"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-8 h-8 rounded-xl bg-hero grid place-items-center text-white font-bold shadow-glow-blue group-hover:scale-110 transition-transform">
                 M
@@ -45,7 +57,7 @@ export default function Topbar() {
               </span>
             </Link>
 
-            <nav className="flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-1">
               {navItems.map((item) => {
                 const active = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
                 return (
@@ -77,6 +89,7 @@ export default function Topbar() {
           {/* 右：功能按钮 */}
           <div className="flex items-center gap-1.5 shrink-0">
             <IconButton
+              hideOnMobile
               active={enableVoiceOutput}
               onClick={() => setEnableVoiceOutput(!enableVoiceOutput)}
               emoji={enableVoiceOutput ? '🔊' : '🔇'}
@@ -84,6 +97,7 @@ export default function Topbar() {
               activeColor="pink"
             />
             <IconButton
+              hideOnMobile
               active={enableVoiceInput}
               onClick={() => setEnableVoiceInput(!enableVoiceInput)}
               emoji="🎙️"
@@ -98,7 +112,7 @@ export default function Topbar() {
               hasBadge={!hasAny}
             />
             {user && (
-              <div className="flex items-center gap-1 ml-1">
+              <div className="hidden lg:flex items-center gap-1 ml-1">
                 <span className="text-xs text-text-soft max-w-[72px] truncate hidden md:inline" title={user.username}>👤 {user.username}</span>
                 <button
                   onClick={async () => { await logout(); router.push('/login'); }}
@@ -113,7 +127,7 @@ export default function Topbar() {
               href="https://github.com/conuausal/MiniAI"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-ghost !p-2"
+              className="hidden lg:inline-flex btn btn-ghost !p-2"
               title="GitHub"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -125,15 +139,17 @@ export default function Topbar() {
         <div className="gradient-line" />
       </header>
       <ApiKeyDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <MobileNav open={navOpen} onClose={() => setNavOpen(false)} />
     </>
   );
 }
 
 function IconButton({
-  active, onClick, emoji, label, hasBadge, activeColor,
+  active, onClick, emoji, label, hasBadge, activeColor, hideOnMobile,
 }: {
   active?: boolean; onClick: () => void; emoji: string; label: string;
   hasBadge?: boolean; activeColor?: 'pink' | 'purple' | 'blue';
+  hideOnMobile?: boolean;
 }) {
   const activeStyle = active
     ? activeColor === 'pink'
@@ -145,7 +161,7 @@ function IconButton({
   return (
     <button
       onClick={onClick}
-      className={`relative btn !p-2 ${activeStyle}`}
+      className={`relative btn !p-2 ${activeStyle} ${hideOnMobile ? 'hidden lg:inline-flex' : ''}`}
       title={label}
     >
       <span className="text-base">{emoji}</span>

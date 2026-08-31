@@ -41,6 +41,7 @@ export default function WritePage() {
   const [ctl, setCtl] = useState<AbortController | null>(null);
   const [activeTab, setActiveTab] = useState<'pipeline' | 'article'>('pipeline');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
 
   useEffect(() => {
     if (models.length === 0) {
@@ -94,123 +95,135 @@ export default function WritePage() {
   const completedSteps = (state.planner.status === 'done' ? 1 : 0) + completedSections + (state.writer.status === 'done' ? 1 : 0);
   const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
+  // 写作配置面板（桌面常驻侧栏 / 移动端抽屉共用）
+  const configPanel = (
+    <div className="p-5 space-y-5">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl">✍️</span>
+          <h1 className="font-serif text-xl font-semibold text-hero">多智能体写作</h1>
+        </div>
+        <p className="text-xs text-text-mute">5 个 Agent 协同：Planner → Researchers → Writer</p>
+      </div>
+
+      <Field label="主题" required>
+        <textarea
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="例：RAG 技术原理与实践"
+          className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition min-h-[70px] resize-none"
+        />
+      </Field>
+
+      <Field label="风格">
+        <div className="grid grid-cols-2 gap-1.5">
+          {STYLES.map((s) => (
+            <button
+              key={s.v}
+              onClick={() => setStyle(s.v)}
+              className={clsx(
+                'text-left text-xs px-2.5 py-2 rounded-lg border transition',
+                style === s.v
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-border hover:bg-bg-soft'
+              )}
+            >
+              <div className="font-medium">{s.emoji} {s.label}</div>
+              <div className="text-[10px] text-text-mute mt-0.5">{s.desc}</div>
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="长度">
+        <div className="space-y-1">
+          {LENGTHS.map((l) => (
+            <button
+              key={l.v}
+              onClick={() => setLength(l.v)}
+              className={clsx(
+                'w-full text-left text-xs px-2.5 py-2 rounded-lg border transition',
+                length === l.v
+                  ? 'border-accent-purple bg-accent-purple/10 text-accent-purple font-medium'
+                  : 'border-border hover:bg-bg-soft'
+              )}
+            >
+              <div className="font-medium">{l.label} <span className="font-normal text-text-mute">· {l.words}</span></div>
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="模型">
+        <select
+          value={currentModel}
+          onChange={(e) => useChatStore.setState({ currentModel: e.target.value })}
+          disabled={isRunning}
+          className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
+        >
+          {enabledModels.length === 0 && <option value="">先配置 API Key</option>}
+          {enabledModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+      </Field>
+
+      <Field label="增强">
+        <div className="space-y-1.5">
+          <CheckboxRow checked={enableRag} onChange={setEnableRag} emoji="📚" label="调用知识库" />
+          <CheckboxRow checked={enableSearch} onChange={setEnableSearch} emoji="🌐" label="启用联网搜索" />
+        </div>
+      </Field>
+
+      <Field label="自定义大纲" hint="可选">
+        <textarea
+          value={customOutline}
+          onChange={(e) => setCustomOutline(e.target.value)}
+          placeholder={'什么是 RAG\n核心原理\n实战案例'}
+          className="w-full text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition min-h-[60px] resize-none"
+        />
+      </Field>
+
+      {!isRunning ? (
+        <button
+          onClick={start}
+          disabled={!topic.trim() || !hasAny}
+          className="w-full btn btn-primary !py-2.5 font-medium"
+        >
+          ✨ 开始写作
+        </button>
+      ) : (
+        <button onClick={stop} className="w-full btn bg-accent-red/15 text-accent-red hover:bg-accent-red/25 !py-2.5">
+          停止生成
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="h-screen flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 flex overflow-hidden">
-        {/* 左侧：表单 */}
-        <aside className="w-80 shrink-0 border-r border-border bg-surface/50 backdrop-blur-md overflow-y-auto">
-          <div className="p-5 space-y-5">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-2xl">✍️</span>
-                <h1 className="font-serif text-xl font-semibold text-hero">多智能体写作</h1>
-              </div>
-              <p className="text-xs text-text-mute">5 个 Agent 协同：Planner → Researchers → Writer</p>
-            </div>
-
-            <Field label="主题" required>
-              <textarea
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="例：RAG 技术原理与实践"
-                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition min-h-[70px] resize-none"
-              />
-            </Field>
-
-            <Field label="风格">
-              <div className="grid grid-cols-2 gap-1.5">
-                {STYLES.map((s) => (
-                  <button
-                    key={s.v}
-                    onClick={() => setStyle(s.v)}
-                    className={clsx(
-                      'text-left text-xs px-2.5 py-2 rounded-lg border transition',
-                      style === s.v
-                        ? 'border-primary bg-primary/10 text-primary font-medium'
-                        : 'border-border hover:bg-bg-soft'
-                    )}
-                  >
-                    <div className="font-medium">{s.emoji} {s.label}</div>
-                    <div className="text-[10px] text-text-mute mt-0.5">{s.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="长度">
-              <div className="space-y-1">
-                {LENGTHS.map((l) => (
-                  <button
-                    key={l.v}
-                    onClick={() => setLength(l.v)}
-                    className={clsx(
-                      'w-full text-left text-xs px-2.5 py-2 rounded-lg border transition',
-                      length === l.v
-                        ? 'border-accent-purple bg-accent-purple/10 text-accent-purple font-medium'
-                        : 'border-border hover:bg-bg-soft'
-                    )}
-                  >
-                    <div className="font-medium">{l.label} <span className="font-normal text-text-mute">· {l.words}</span></div>
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="模型">
-              <select
-                value={currentModel}
-                onChange={(e) => useChatStore.setState({ currentModel: e.target.value })}
-                disabled={isRunning}
-                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition"
-              >
-                {enabledModels.length === 0 && <option value="">先配置 API Key</option>}
-                {enabledModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
-            </Field>
-
-            <Field label="增强">
-              <div className="space-y-1.5">
-                <CheckboxRow checked={enableRag} onChange={setEnableRag} emoji="📚" label="调用知识库" />
-                <CheckboxRow checked={enableSearch} onChange={setEnableSearch} emoji="🌐" label="启用联网搜索" />
-              </div>
-            </Field>
-
-            <Field label="自定义大纲" hint="可选">
-              <textarea
-                value={customOutline}
-                onChange={(e) => setCustomOutline(e.target.value)}
-                placeholder={'什么是 RAG\n核心原理\n实战案例'}
-                className="w-full text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-soft focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition min-h-[60px] resize-none"
-              />
-            </Field>
-
-            {!isRunning ? (
-              <button
-                onClick={start}
-                disabled={!topic.trim() || !hasAny}
-                className="w-full btn btn-primary !py-2.5 font-medium"
-              >
-                ✨ 开始写作
-              </button>
-            ) : (
-              <button onClick={stop} className="w-full btn bg-accent-red/15 text-accent-red hover:bg-accent-red/25 !py-2.5">
-                停止生成
-              </button>
-            )}
-          </div>
+        {/* 左侧：表单（桌面常驻 / 移动端抽屉复用） */}
+        <aside className="hidden lg:flex w-80 shrink-0 border-r border-border bg-surface/50 backdrop-blur-md overflow-y-auto">
+          {configPanel}
         </aside>
 
         {/* 右侧：进度 + 文章 */}
         <div className="flex-1 flex flex-col bg-bg overflow-hidden">
           {/* 顶部进度 */}
-          <div className="border-b border-border-soft bg-surface/50 backdrop-blur-md px-5 py-3">
+          <div className="border-b border-border-soft bg-surface/50 backdrop-blur-md px-4 lg:px-5 py-3">
             <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setConfigOpen(true)}
+                  className="lg:hidden text-sm px-2 py-1 rounded-md text-text-soft hover:bg-bg-soft"
+                  aria-label="写作配置"
+                >
+                  ⚙️
+                </button>
                 <button
                   onClick={() => setActiveTab('pipeline')}
                   className={clsx(
-                    'text-sm px-3 py-1 rounded-md transition',
+                    'text-sm px-2 lg:px-3 py-1 rounded-md transition',
                     activeTab === 'pipeline'
                       ? 'bg-primary/15 text-primary font-medium'
                       : 'text-text-soft hover:bg-bg-soft'
@@ -222,7 +235,7 @@ export default function WritePage() {
                   onClick={() => setActiveTab('article')}
                   disabled={!state.writer.article}
                   className={clsx(
-                    'text-sm px-3 py-1 rounded-md transition',
+                    'text-sm px-2 lg:px-3 py-1 rounded-md transition',
                     activeTab === 'article'
                       ? 'bg-primary/15 text-primary font-medium'
                       : 'text-text-soft hover:bg-bg-soft disabled:opacity-40'
@@ -261,7 +274,7 @@ export default function WritePage() {
 
           <div className="flex-1 overflow-y-auto">
             {activeTab === 'pipeline' ? (
-              <div className="max-w-2xl mx-auto p-6">
+              <div className="max-w-2xl mx-auto p-4 lg:p-6">
                 <AgentPipeline state={state} />
                 {state.error && (
                   <div className="mt-4 p-3 rounded-lg bg-accent-red/10 text-accent-red text-sm animate-fade-in border border-accent-red/30">
@@ -270,9 +283,9 @@ export default function WritePage() {
                 )}
               </div>
             ) : (
-              <article className="max-w-3xl mx-auto p-6">
+              <article className="max-w-3xl mx-auto p-4 lg:p-6">
                 {state.writer.article ? (
-                  <div className="glass-card rounded-2xl p-8 md:p-10 animate-fade-in">
+                  <div className="glass-card rounded-2xl p-6 md:p-10 animate-fade-in">
                     <div className="prose prose-base max-w-none font-serif">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
                     </div>
@@ -288,6 +301,20 @@ export default function WritePage() {
           </div>
         </div>
       </div>
+
+      {/* 移动端配置抽屉 */}
+      {configOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setConfigOpen(false)} />
+          <aside className="absolute top-0 bottom-0 left-0 w-[85vw] max-w-sm bg-surface shadow-xl animate-drawer-in-left flex flex-col">
+            <header className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+              <span className="font-semibold">⚙️ 写作配置</span>
+              <button onClick={() => setConfigOpen(false)} className="btn btn-ghost !p-1.5 rounded-lg" aria-label="关闭配置">✕</button>
+            </header>
+            <div className="flex-1 overflow-y-auto">{configPanel}</div>
+          </aside>
+        </div>
+      )}
 
       {/* 文章预览弹窗 */}
       {previewOpen && state.writer.article && (
@@ -306,7 +333,7 @@ export default function WritePage() {
                 <button onClick={() => setPreviewOpen(false)} className="btn btn-ghost !p-2" title="关闭">✕</button>
               </div>
             </header>
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
               <article className="prose prose-base max-w-none font-serif">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.writer.article}</ReactMarkdown>
               </article>

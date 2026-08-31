@@ -80,9 +80,9 @@ export default function ConsultPage() {
   const monthKeys = Object.keys(summary.by_month).sort().reverse();
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col lg:flex-row">
       {/* 客户列表 */}
-      <aside className="w-60 shrink-0 border-r border-border-soft p-4 space-y-3 overflow-y-auto">
+      <aside className="w-full lg:w-60 shrink-0 border-b lg:border-b-0 lg:border-r border-border-soft p-4 space-y-3 overflow-y-auto max-h-[40vh] lg:max-h-none">
         <div className="flex items-center gap-2">
           <span className="text-xl">💼</span>
           <h1 className="font-serif font-semibold text-hero">咨询工作</h1>
@@ -112,7 +112,7 @@ export default function ConsultPage() {
       </aside>
 
       {/* 客户详情 */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6">
         {!sel ? (
           <div className="text-center text-text-mute py-24">
             <div className="text-4xl mb-3">💼</div>
@@ -128,9 +128,9 @@ export default function ConsultPage() {
             {/* 进度记录 */}
             <section className="glass-card rounded-2xl p-4 space-y-2">
               <h3 className="font-semibold text-sm">📈 咨询进度</h3>
-              <div className="flex gap-2">
-                <input value={rTitle} onChange={(e) => setRTitle(e.target.value)} placeholder="事项标题" className="w-48 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
-                <input value={rContent} onChange={(e) => setRContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addRecord()} placeholder="详情（可选）" className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
+              <div className="flex flex-wrap gap-2">
+                <input value={rTitle} onChange={(e) => setRTitle(e.target.value)} placeholder="事项标题" className="w-full lg:w-48 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
+                <input value={rContent} onChange={(e) => setRContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addRecord()} placeholder="详情（可选）" className="flex-1 min-w-[140px] px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
                 <button onClick={addRecord} disabled={!rTitle.trim()} className="btn btn-primary !py-1.5 text-xs">添加</button>
               </div>
               {records.length === 0 ? <div className="text-sm text-text-mute text-center py-4">暂无记录</div> : (
@@ -154,8 +154,8 @@ export default function ConsultPage() {
             {/* 收费记录 */}
             <section className="glass-card rounded-2xl p-4 space-y-2">
               <h3 className="font-semibold text-sm">💰 收费记录</h3>
-              <div className="flex gap-2">
-                <input type="number" value={iAmt} onChange={(e) => setIAmt(e.target.value)} placeholder="金额" className="w-28 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
+              <div className="flex flex-wrap gap-2">
+                <input type="number" value={iAmt} onChange={(e) => setIAmt(e.target.value)} placeholder="金额" className="w-full sm:w-28 px-3 py-1.5 text-sm rounded-lg border border-border bg-bg-soft focus:outline-none" />
                 <input type="date" value={iDate} onChange={(e) => setIDate(e.target.value)} className="px-2 py-1.5 text-xs rounded-lg border border-border bg-bg-soft" />
                 <button onClick={addIncome} disabled={!iAmt.trim()} className="btn btn-primary !py-1.5 text-xs">记一笔</button>
               </div>

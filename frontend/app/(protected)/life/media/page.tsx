@@ -141,7 +141,8 @@ export default function MediaPage() {
         {stats.length === 0 ? (
           <div className="text-sm text-text-mute text-center py-6">还没有数据记录</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-text-mute border-b border-border-soft">
                 <th className="py-1.5">日期</th><th>平台</th><th className="text-right">粉丝</th><th className="text-right">阅读</th><th className="text-right">点赞</th><th className="text-right">评论</th><th></th>
@@ -160,7 +161,8 @@ export default function MediaPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </section>
     </div>
