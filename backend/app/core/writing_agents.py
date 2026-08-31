@@ -146,7 +146,7 @@ async def planner_agent(
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.6,
-        max_tokens=1500,
+        max_tokens=3000,
         user_keys=user_keys,
         custom_providers=custom_providers,
     )
@@ -182,6 +182,30 @@ def _parse_outline(raw: str, fallback_topic: str, length: str) -> List[OutlineIt
             return items
     except Exception as e:
         logger.warning("Planner JSON 解析失败: {}\n原始输出:\n{}", e, raw[:300])
+
+    # 截断 JSON 抢救：max_tokens 截断的大纲往往在 sections 数组中间断掉，
+    # 逐个提取已完整的扁平 section 对象（{...} 内无嵌套花括号）尽量挽救
+    salvaged: List[OutlineItem] = []
+    for i, sec_m in enumerate(re.finditer(r"\{[^{}]*\}", candidate)):
+        try:
+            sec = json.loads(sec_m.group(0))
+            title = str(sec.get("title", "")).strip()
+            if not title:
+                continue
+            salvaged.append(
+                OutlineItem(
+                    section_id=f"sec-{len(salvaged)+1}",
+                    title=title,
+                    focus=str(sec.get("focus", "")).strip(),
+                    angle=str(sec.get("angle", "")).strip(),
+                    search_queries=list(sec.get("search_queries") or []),
+                )
+            )
+        except Exception:
+            continue
+    if salvaged:
+        logger.warning("Planner JSON 截断，已抢救出 {} 个章节", len(salvaged))
+        return salvaged
 
     # 保底：根据 length 生成默认章节
     _, default_n = LENGTH_GUIDES.get(length, LENGTH_GUIDES["medium"])

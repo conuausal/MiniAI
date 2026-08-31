@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     # Tavily
     tavily_api_key: str = ""
 
+    # ===== LLM 调用 =====
+    # 单次 LLM 请求超时（秒）。不设的话 OpenAI SDK 默认 600 秒，多智能体写作等
+    # 多次串行调用的场景在 provider 挂住时会长时间无响应
+    llm_timeout_seconds: float = 180.0
+
     # 阿里云百炼（DashScope）Web Search（联网搜索），与 qwen 共用同一个 key
     dashscope_api_key: str = ""
 

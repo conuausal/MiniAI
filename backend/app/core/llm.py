@@ -195,7 +195,9 @@ def _client(provider: str, effective_keys: Dict[str, Dict[str, str]]) -> Optiona
     base_url = (info.get("base_url") or "").strip()
     if not api_key or not base_url:
         return None
-    return AsyncOpenAI(api_key=api_key, base_url=base_url)
+    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=settings.llm_timeout_seconds, max_retries=1)
+
+
 def _custom_provider_client(custom: Dict[str, dict], provider_id: str) -> Optional[AsyncOpenAI]:
     info = custom.get(provider_id)
     if not info:
@@ -204,7 +206,7 @@ def _custom_provider_client(custom: Dict[str, dict], provider_id: str) -> Option
     base_url = (info.get("base_url") or "").strip()
     if not api_key or not base_url:
         return None
-    return AsyncOpenAI(api_key=api_key, base_url=base_url)
+    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=settings.llm_timeout_seconds, max_retries=1)
 
 
 # ---------- 模型清单 ----------
