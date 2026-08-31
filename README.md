@@ -1,10 +1,8 @@
-﻿﻿<div align="center">
+<div align="center">
 
 # 🧠 MiniAI
 
-**开源、轻量、可私有化部署的个人 AI 助手**
-
-[English](#english) · [简体中文](#简体中文) · [功能特性](#✨-功能特性) · [快速开始](#🚀-快速开始) · [部署上线](#🌐-部署上线) · [Roadmap](#🗺️-roadmap)
+**个人 AI 助手 + 工作生活管理 —— 多模型 · RAG · 联网搜索 · 工具调用 · 多智能体写作**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://www.python.org/)
@@ -17,57 +15,55 @@
 
 ## ✨ 功能特性
 
-基于日常痛点清单打造，覆盖 AI 助手 4 项核心刚需 + 多项高级能力：
-
-| 优先级 | 能力 | 状态 |
-|:--|:--|:--:|
-| **P1** | 多模型自由切换（DeepSeek / OpenAI / 智谱 等 OpenAI 兼容协议） | ✅ |
-| **P1** | RAG 知识库（PDF / DOCX / TXT / MD，本地向量库 ChromaDB） | ✅ |
-| **P1** | 联网搜索（Tavily，可替换） | ✅ |
-| **P1** | 对话记忆（SQLite 持久化 + 会话管理） | ✅ |
-| **P2** | 流式输出（SSE，token-by-token） | ✅ |
-| **P2** | 多集合知识库（隔离不同业务文档） | ✅ |
-| **P3** | Docker 一键部署 / SaaS 化 | ✅ |
-| **P2** | 多智能体协作（任务分解 + 工具调度） | 🚧 |
-| **P2** | 语音输入 / 输出（Whisper + TTS） | 🚧 |
-| **P3** | 操作可视化（ReAct 推理链） | 🚧 |
+| 能力 | 说明 |
+|:--|:--|
+| 🧠 **多模型自由切换** | DeepSeek / OpenAI / 智谱 GLM / MiniMax / Kimi / Qwen / Gemini，或任意 OpenAI 兼容服务（Ollama / vLLM / One-API） |
+| 🎭 **内置演示模型** | `miniai-demo` 无需任何 API Key，开箱即可体验聊天、工具调用、多智能体写作全流程 |
+| 📚 **RAG 知识库** | 上传 PDF / DOCX / TXT / Markdown，ChromaDB 向量检索 + 混合检索重排，对话中自动注入上下文 |
+| 🌐 **联网搜索** | 阿里云百炼 DashScope Web Search（未配置时回退 Tavily） |
+| 🔧 **Function Calling** | 5 个内置工具（时间 / 计算 / 搜索 / 知识库 / 读文件）+ 调用过程可视化折叠卡片 |
+| ✍️ **多智能体写作** | Planner → 并行 Researchers → Writer 流水线，SSE 实时进度 + 文章预览 |
+| 💬 **对话记忆** | MySQL 持久化会话与消息 + Redis 记忆窗口 + 自动标题 |
+| ⚡ **流式输出** | SSE token-by-token |
+| 🎤 **语音交互** | 浏览器原生 Web Speech API（STT + TTS），零成本 |
+| 🏠 **个人工作生活管理** | 9 大模块：总览 / 今日计划 / 自媒体 / 开发 / 咨询 / 健身 / 饮食 / 游戏 / 数据与设置 |
+| 🔐 **多用户账号** | 注册 / 登录（JWT httpOnly Cookie），全站数据按用户隔离 |
+| 🎀 **随机二次元** | 每日随机二次元图片 |
+| 🐳 **一键启动** | Docker Compose 启动全栈（后端 + 前端 + MySQL + Redis） |
 
 ---
 
 ## 🏗️ 架构
 
 ```
-┌──────────────────┐         ┌────────────────────────────────┐
-│   Next.js 14     │  HTTP   │          FastAPI               │
-│  (Chat UI)       │ ──────► │  ┌─────────────────────────┐   │
-│  - 流式 SSE      │         │  │   Router (chat/...)     │   │
-│  - Markdown      │         │  └────────────┬────────────┘   │
-│  - TailwindCSS   │         │       ┌──────┴───────┐         │
-└──────────────────┘         │       ▼              ▼         │
-                             │   LLM Router     RAG Engine    │
-                             │   (OpenAI 协议)  (ChromaDB)    │
-                             │       │              │         │
-                             │       ▼              ▼         │
-                             │  DeepSeek / GPT  Embeddings    │
-                             │  Claude / GLM   bge-small-zh   │
-                             │       │                        │
-                             │       ▼                        │
-                             │  ┌──────────────────┐         │
-                             │  │  Web Search      │         │
-                             │  │  (Tavily)        │         │
-                             │  └──────────────────┘         │
-                             │       │                        │
-                             │       ▼                        │
-                             │  ┌──────────────────┐         │
-                             │  │  SQLite          │         │
-                             │  │  (sessions/msgs)  │         │
-                             │  └──────────────────┘         │
-                             └────────────────────────────────┘
+┌───────────────────┐         ┌─────────────────────────────────────┐
+│    Next.js 14     │  HTTP   │              FastAPI                │
+│  (需登录, (protected))│ ──────► │  ┌─────────────────────────────┐   │
+│  - 聊天 / 写作     │  rewrite │  │ Router: chat / knowledge /    │   │
+│  - 知识库 / 生活   │  /api/*  │  │         write / life / auth /  │   │
+│  - 二次元 / 设置   │         │  │         sessions / models / ... │   │
+└───────────────────┘         │  └──────────────┬────────────────┘   │
+                              │      ┌──────────┴─────────┐          │
+                              │      ▼                    ▼          │
+                              │  LLM Router          RAG Engine       │
+                              │  (OpenAI 兼容)       (ChromaDB)       │
+                              │   + demo 模型         + 混合检索重排    │
+                              │      │                               │
+                              │      ├──► Web Search（阿里云/Tavily）   │
+                              │      │                               │
+                              │      ▼                               │
+                              │  ┌─────────────────────────────┐     │
+                              │  │ MySQL（用户/会话/消息/生活管理）│     │
+                              │  │ Redis（对话记忆窗口）          │     │
+                              │  └─────────────────────────────┘     │
+                              └─────────────────────────────────────┘
 ```
 
 ---
 
 ## 🚀 快速开始
+
+> 前置：需要 **Docker**（MySQL 与 Redis 跑在容器中）。国内网络建议先配置 Docker 镜像加速。
 
 ### 方式一：Docker Compose（推荐）
 
@@ -76,11 +72,11 @@
 git clone https://github.com/conuausal/MiniAI.git
 cd MiniAI
 
-# 2. 配置 API Key
+# 2. 配置环境变量（不填 API Key 也能用内置 demo 模型体验）
 cp backend/.env.example backend/.env
-# 编辑 backend/.env，至少填入一个模型的 API Key（推荐 DeepSeek）
+# 编辑 backend/.env，填入 DEEPSEEK_API_KEY 等（可选）
 
-# 3. 启动
+# 3. 一键启动全栈（backend + frontend + mysql + redis）
 docker compose up -d
 
 # 浏览器访问 http://localhost:3000
@@ -88,7 +84,13 @@ docker compose up -d
 
 ### 方式二：本地开发模式
 
-#### 后端
+**第一步：启动基础设施**（MySQL 容器映射宿主 3307，Redis 6379）
+
+```bash
+docker compose up -d mysql redis
+```
+
+**第二步：后端**
 
 ```bash
 cd backend
@@ -99,15 +101,13 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-cp .env.example .env
-# 填入 API Key
-
+cp .env.example .env   # 填入 API Key（可选）
 uvicorn app.main:app --reload --port 8000
 ```
 
-API 文档：访问 `http://localhost:8000/docs`
+API 文档：http://localhost:8000/docs
 
-#### 前端
+**第三步：前端**
 
 ```bash
 cd frontend
@@ -115,40 +115,13 @@ npm install
 npm run dev
 ```
 
-访问 `http://localhost:3000`
+访问 http://localhost:3000
 
----
+### 首次使用
 
-## 🌐 部署上线
-
-### 推荐平台（免费额度起步）
-
-| 平台 | 用途 | 费用 |
-|:--|:--|:--|
-| [Railway](https://railway.app) | 部署后端 + 持久化卷 | $5/月赠送额度 |
-| [Render](https://render.com) | 部署后端 / 全栈 | 免费层 + $7/月 |
-| [Vercel](https://vercel.com) | 部署 Next.js 前端 | 免费 |
-| [Fly.io](https://fly.io) | 全球边缘部署 | 免费层 |
-| 自有 VPS | Docker Compose 一键 | 仅 VPS 费用 |
-
-### 部署到 Railway（示例）
-
-1. 把仓库推到 GitHub
-2. Railway → New Project → Deploy from GitHub
-3. 选择 `backend` 目录作为 Root
-4. 配置环境变量（从 `backend/.env` 复制）
-5. 添加一个 Volume 挂载到 `/app/data` 用于持久化向量库
-6. 部署完成后拿到后端 URL，类似 `https://xxx.up.railway.app`
-7. 部署前端到 Vercel：Root = `frontend`，环境变量 `NEXT_PUBLIC_API_BASE` = 后端 URL
-
-### 部署到自有 VPS
-
-```bash
-# 一台 2C2G 的 VPS 足够
-scp -r ./* user@your-server:/opt/miniai
-ssh user@your-server "cd /opt/miniai && docker compose up -d"
-# 反向代理建议使用 Caddy 或 Nginx + Let's Encrypt 自动 HTTPS
-```
+1. 打开 http://localhost:3000，未登录会自动跳转 `/login`
+2. 注册一个账号（用户名 + 密码），登录后即可使用
+3. 默认模型为内置 `miniai-demo`，无需 API Key 即可体验；也可在右上角 🔑 抽屉里填自己的模型 Key 或添加自定义 OpenAI 兼容服务
 
 ---
 
@@ -159,60 +132,77 @@ MiniAI/
 ├── backend/                # FastAPI 后端
 │   ├── app/
 │   │   ├── api/            # REST 路由
-│   │   ├── core/           # LLM / RAG / Web Search / Memory
-│   │   ├── db/             # 数据库
+│   │   │   ├── chat.py         # /api/chat（流式 + 工具调用）
+│   │   │   ├── knowledge.py    # /api/knowledge（知识库）
+│   │   │   ├── write.py        # /api/write（多智能体写作）
+│   │   │   ├── life/           # /api/life（生活管理 9 模块）
+│   │   │   ├── auth.py         # /api/auth（注册 / 登录）
+│   │   │   └── ...             # sessions / models / tools / anime
+│   │   ├── core/           # 核心能力
+│   │   │   ├── llm.py          # 多模型路由
+│   │   │   ├── rag.py          # ChromaDB 向量库 + 混合检索
+│   │   │   ├── web_search.py   # 联网搜索（阿里云百炼 / Tavily）
+│   │   │   ├── tools.py        # Function Calling 工具
+│   │   │   ├── writing_agents.py # 多智能体写作流水线
+│   │   │   ├── auth.py         # JWT 鉴权
+│   │   │   ├── demo_provider.py # 内置演示模型
+│   │   │   └── memory.py       # 会话 / 消息持久化
 │   │   ├── models/         # ORM + Pydantic
+│   │   ├── db/             # 数据库引擎
 │   │   └── main.py
 │   ├── data/               # 运行时数据（git 忽略）
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/               # Next.js 14 前端
-│   ├── app/                # App Router
-│   ├── components/
-│   ├── lib/                # API 客户端 + 状态
+│   ├── app/
+│   │   ├── (protected)/    # 需登录页面
+│   │   │   ├── page.tsx        # 对话
+│   │   │   ├── write/          # 多智能体写作
+│   │   │   ├── knowledge/      # 知识库
+│   │   │   ├── life/           # 工作生活管理
+│   │   │   ├── anime/          # 随机二次元
+│   │   │   └── settings/       # 设置
+│   │   └── login/          # 登录 / 注册
+│   ├── components/         # UI 组件
+│   ├── lib/                # API 客户端 + 状态管理
 │   ├── Dockerfile
 │   └── package.json
 ├── docker-compose.yml
-├── .github/workflows/      # CI
+├── .github/workflows/      # CI（lint / 构建 / Docker 镜像）
 ├── README.md
-├── LICENSE                 # MIT
-└── CONTRIBUTING.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+└── LICENSE                 # MIT
 ```
 
 ---
 
 ## 🔌 接入新模型
 
-所有模型走 OpenAI 兼容协议，只需在 `backend/.env` 添加 base_url + api_key，然后编辑 `backend/app/core/llm.py` 注册模型即可：
+所有模型走 OpenAI 兼容协议。两种方式：
+
+1. **后端 .env 配置**：在 `backend/.env` 添加 base_url + api_key，然后在 `backend/app/core/llm.py` 的 `MODEL_REGISTRY` 注册：
 
 ```python
 MODEL_REGISTRY["my-model"] = {
-    "provider": "myprovider",   # 在 _client() 里加上对应 base/key
+    "provider": "myprovider",   # 在 PROVIDER_DEFAULTS / _client() 里加上对应 base/key
     "label": "我的模型",
 }
 ```
 
-如果你用的是 vLLM / Ollama / LM Studio 本地部署，只需把 base_url 指向本地地址（如 `http://localhost:11434/v1`）。
+2. **前端动态添加**：在网页右上角 🔑 抽屉里填写任意 OpenAI 兼容服务的 Base URL + Key + 模型 ID，无需改代码。
+
+本地模型（vLLM / Ollama / LM Studio）只需把 base_url 指向本地地址，如 `http://localhost:11434/v1`。
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ 规划中
 
-- [x] MVP：多模型 + RAG + 联网 + 记忆（0.1.0）
-- [x] Function Calling + 工具可视化（0.2.0）
-- [x] 多智能体写作（Planner/Researcher/Writer 流水线 + 可视化，0.3.0）
-- [x] 多智能体写作（Planner/Researcher/Writer）
-- [ ] 多智能体通用任务（市场分析 / 数据报告 / 代码评审 等）
-- [x] 工具调用（Function Calling）：5 个内置工具（时间/计算/搜索/检索/读文件）+ 可视化卡片
-- [ ] 语音交互（Whisper ASR + Edge TTS）
-- [ ] Web 搜索结果可视化（引用卡片）
+- [ ] 找回密码
+- [ ] 通用多智能体任务（市场分析 / 数据报告 / 代码评审）
 - [ ] 自定义工具（用户上传 JSON Schema）
-- [x] 工具调用可视化（折叠卡片）
-- [ ] 用户系统 + 多租户
 - [ ] 移动端 PWA
 - [ ] 浏览器扩展
-
-详见 [GitHub Projects](https://github.com/conuausal/MiniAI/projects)。
 
 ---
 
@@ -229,140 +219,3 @@ MODEL_REGISTRY["my-model"] = {
 ## 📄 License
 
 本项目基于 [MIT](LICENSE) 开源。
-
----
-
-## 简体中文
-
-> 如果你是中文用户，上面的内容已经够用了 😊。
-
-### 痛点驱动的设计
-
-MiniAI 起始于一份个人痛点清单（见 [`我的日常痛点.md.md`](./我的日常痛点.md.md)），
-针对 6 个真实场景（早汇报、长文档摘要、周报生成、查资料、会议记录、下班日报）
-定义了 3 档优先级功能。本次发布覆盖 **P1 核心刚需** 与部分 P2 体验优化。
-
-### 推荐的入门路径
-
-1. 先用 DeepSeek（成本低、中文强）跑通"对话 + 联网"主流程
-2. 在知识库页面上传 2~3 份你的真实文档（产品手册 / 周报模板），体验 RAG
-3. 在 `backend/.env` 接入更多模型（GPT-4o 适合创意，o1 适合复杂推理）
-4. 一键 Docker 部署后即可在任何设备访问
-
-
-
-### 🔧 Function Calling 怎么用？
-
-勾选对话页右上角的 **🔧 工具** 开关，然后试试这些问题：
-
-| 你的输入 | MiniAI 自动做的 |
-|:--|:--|
-| 「现在几点了？」 | 调用 get_current_time 返回准确时间 |
-| 「(123+456)*7 等于多少」 | 调用 calculate 安全求值 |
-| 「帮我搜下今天 AI 新闻」 | 调用 web_search 实时检索 |
-| 「之前上传的那份文档说了什么」 | 调用 query_knowledge RAG 召回 |
-| 「打开 README.md 看看」 | 调用 ead_file 读取项目内文件 |
-
-调用过程会显示在助手消息下方的一个**琥珀色折叠卡片**里，展开能看到每个工具的名称、参数、结果 —— 这正是你痛点 P3「操作可视化」的落地。
-
-如果你想加自己的工具（比如"查日历"、"发邮件"），只需在 ackend/app/core/tools.py 里再 _register(...) 一行即可。
-
-
-### 🤖 多智能体写作怎么用？
-
-进入侧边栏 **✍️ 多智能体写作**，填一个主题，选择风格 / 长度，5 个 Agent 就会按这个流水线协作：
-
-`
-   👤 用户输入主题
-       │
-       ▼
-   ┌─────────────┐
-   │ 🧭 Planner   │  主编：拆解为 3-6 章大纲
-   └──────┬──────┘
-          ▼
-   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-   │ 🔍 Research  │  │ 🔍 Research  │  │ 🔍 Research  │  并行收集素材（可调用 RAG + 联网）
-   │    第 1 章    │  │    第 2 章    │  │    第 3 章    │
-   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-          └───────────┬───────────────┘
-                      ▼
-              ┌─────────────┐
-              │ ✍️ Writer    │  综合所有素材，生成最终 Markdown 文章
-              └──────┬──────┘
-                     ▼
-                  📄 一键下载 .md
-`
-
-适合场景：
-- 「帮我写一篇关于 RAG 原理的博客」
-- 「做一份 AI Agent 行业研究报告」
-- 「为 XX 主题准备一份学术综述」
-
-可视化卡片会实时显示每个 Agent 的运行状态、章节大纲、调研笔记，让 AI 的"思考过程"对你完全透明（这正是你痛点 P3「操作可视化」的落地）。
-
-
-
-### 🤖 支持的模型（v0.5.0 · 25 个内置 + 任意自定义）
-
-| Provider | 模型 | 说明 |
-|:--|:--|:--|
-| 🐋 DeepSeek | V3 · R1 · Coder-V2 | 中文性价比之王 |
-| 🧠 OpenAI | GPT-4o · mini · 4-Turbo · 3.5-Turbo · o1 · o1-mini | 海外旗舰 |
-| 🤖 MiniMax | **M3** · Text-01 · abab6.5s | 多模态旗舰 |
-| 🀄 智谱 GLM | 4-Plus · 4-Flash（免费）· 4-Long | 国产 |
-| 🌙 Moonshot Kimi | 128K · 32K · 8K | 超长上下文 |
-| ☁️ 通义千问 Qwen | Max · Plus · Turbo · Long | 阿里 DashScope |
-| 💎 Google Gemini | 1.5 Pro · 1.5 Flash · 2.0 Flash Exp | 多模态 |
-| ⚙️ **自定义** | **任意 OpenAI 兼容服务** | 在 🔑 抽屉里添加 Base URL + 模型 |
-
-每个模型都有标签徽章：推荐 / 推理 / 代码 / 快速 / 经济 / 中文 / 长文本 / 多模态 / 免费 / 最新
-
-### 我能不能纯本地跑、不花钱？
-
-可以。三个步骤：
-
-1. 用 [Ollama](https://ollama.com) 本地跑模型（如 `ollama run qwen2.5:7b`）
-2. 把 Ollama 当作 OpenAI 兼容后端（base_url = `http://host.docker.internal:11434/v1`）
-3. 不需要联网搜索 API，关闭 Tavily 即可
-
-向量库的 Embedding 模型（`BAAI/bge-small-zh-v1.5`）首次启动会从 HuggingFace 下载，约 90 MB。
-
----
-
-## English
-
-### What is MiniAI?
-
-MiniAI is an **open-source, lightweight, self-hostable personal AI assistant**.
-It addresses the everyday pain points documented in [`我的日常痛点.md.md`](./我的日常痛点.md.md)
-(morning briefings, document summarization, weekly reports, research, meeting notes, end-of-day summaries).
-
-### Features
-
-- **Multi-model** — switch between DeepSeek, OpenAI, Zhipu GLM, or any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio…)
-- **RAG** — upload PDFs / DOCX / TXT / Markdown, chat with your own knowledge base
-- **Web search** — Tavily-powered real-time search injection
-- **Conversation memory** — persistent sessions with auto-titling
-- **Streaming** — SSE token-by-token output
-- **Docker-first** — one command to ship anywhere
-
-### Quick Start
-
-```bash
-git clone https://github.com/conuausal/MiniAI.git
-cd MiniAI
-cp backend/.env.example backend/.env
-$EDITOR backend/.env          # fill in at least one API key
-docker compose up -d
-open http://localhost:3000
-```
-
-### Stack
-
-- **Backend**: Python 3.11 / FastAPI / SQLAlchemy 2 / ChromaDB / OpenAI SDK
-- **Frontend**: Next.js 14 / React 18 / TailwindCSS / Zustand / SWR
-- **Infra**: Docker / Docker Compose / GitHub Actions
-
-### License
-
-MIT — see [LICENSE](LICENSE).

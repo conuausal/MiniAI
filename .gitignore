@@ -48,3 +48,10 @@ Thumbs.db
 # 日志
 *.log
 logs/
+
+# 内部文档（仅本地保留，不推送到仓库）
+HANDOFF.md
+PROJECT_SUMMARY.md
+PYCHARM_SETUP.md
+需求分析文档*.md
+我的日常痛点*.md
