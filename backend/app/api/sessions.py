@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user
 from app.core.memory import MemoryStore
+from app.core.memory_window import delete_window
 from app.db.database import get_session
 from app.models.schemas import SessionCreate, SessionDetail, SessionInfo
 from app.models.user import User
@@ -59,4 +60,5 @@ async def delete_session(session_id: str, db: AsyncSession = Depends(get_session
     ok = await store.delete_session(session_id, user.id)
     if not ok:
         raise HTTPException(status_code=404, detail="session 不存在")
+    await delete_window(session_id)
     return {"deleted": session_id}

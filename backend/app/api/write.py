@@ -19,8 +19,12 @@ router = APIRouter()
 
 
 _PROGRESS_STORE: Dict[str, List[dict]] = {}
+# task_id -> 创建者 user_id（回放接口按此做归属校验）
+_TASK_OWNER: Dict[str, int] = {}
 # 防止无界增长：最多保留最近 MAX_TASKS 个任务的事件，更早的淘汰
 MAX_TASKS = 100
+# 单任务回放事件数上限（SSE 实时推送不受限，只影响事后回放）
+MAX_EVENTS_PER_TASK = 2000
 
 
 def _evict_stale_tasks() -> None:
@@ -53,6 +57,7 @@ async def write_article(
 
     task_id = uuid.uuid4().hex
     _PROGRESS_STORE[task_id] = []
+    _TASK_OWNER[task_id] = user.id
 
     async def event_gen() -> AsyncIterator[str]:
         queue: asyncio.Queue = asyncio.Queue()
@@ -60,7 +65,9 @@ async def write_article(
         def emit(payload: dict) -> None:
             payload_with_id = {**payload, "task_id": task_id}
             queue.put_nowait(payload_with_id)
-            _PROGRESS_STORE.setdefault(task_id, []).append(payload)
+            events = _PROGRESS_STORE.setdefault(task_id, [])
+            if len(events) < MAX_EVENTS_PER_TASK:
+                events.append(payload)
             _evict_stale_tasks()
 
         yield _sse({"event": "start", "task_id": task_id, "topic": req.topic})
@@ -96,12 +103,19 @@ async def write_article(
         finally:
             if not task.done():
                 task.cancel()
+            _TASK_OWNER.pop(task_id, None)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 @router.get("/article/{task_id}")
-async def get_writing_task(task_id: str) -> dict:
+async def get_writing_task(
+    task_id: str,
+    user: User = Depends(get_current_user),
+) -> dict:
+    # 归属校验：不存在与非本人统一返回 404，不泄露 task 存在性
+    if _TASK_OWNER.get(task_id) != user.id:
+        raise HTTPException(status_code=404, detail="task 不存在或已过期")
     events = _PROGRESS_STORE.get(task_id)
     if events is None:
         raise HTTPException(status_code=404, detail="task 不存在或已过期")

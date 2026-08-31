@@ -26,6 +26,9 @@ router = APIRouter()
 UPLOAD_DIR = Path(settings.vector_store_dir).parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# 上传大小上限（与前端 Next 侧限制一致）
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
 
 @router.post("/upload", response_model=KnowledgeDocInfo)
 async def upload_document(
@@ -41,7 +44,12 @@ async def upload_document(
 
     doc_id = uuid.uuid4().hex
     dest = UPLOAD_DIR / f"{doc_id}{suffix}"
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"文件过大（超过 {MAX_UPLOAD_BYTES // 1024 // 1024}MB）")
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:  # 双保险：size 属性缺失时仍拦截
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=413, detail=f"文件过大（超过 {MAX_UPLOAD_BYTES // 1024 // 1024}MB）")
     dest.write_bytes(content)
 
     try:

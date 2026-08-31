@@ -5,8 +5,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header
 
+from app.core.auth import get_current_user
 from app.core.llm import list_models, parse_custom_providers, parse_user_keys
 from app.models.schemas import ModelListResponse
+from app.models.user import User
 
 router = APIRouter()
 
@@ -28,7 +30,7 @@ async def get_models(
 
 
 @router.post("/reload")
-async def reload_models() -> dict:
+async def reload_models(user: User = Depends(get_current_user)) -> dict:
     """刷新模型清单（无缓存，直接重算）。"""
     from app.core import llm
     return {"reloaded": True, "count": len(llm.list_models())}

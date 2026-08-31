@@ -23,26 +23,38 @@ export default function SessionList({ onNavigate }: { onNavigate?: () => void })
   useEffect(() => { refresh(); }, []);
 
   const newSession = async () => {
-    const s = await api.createSession('新对话', useChatStore.getState().currentModel);
-    await refresh();
-    setCurrentSession(s.id);
-    setMessages([]);
-    onNavigate?.();
+    try {
+      const s = await api.createSession('新对话', useChatStore.getState().currentModel);
+      await refresh();
+      setCurrentSession(s.id);
+      setMessages([]);
+      onNavigate?.();
+    } catch (e: any) {
+      alert('新建对话失败：' + (e?.message || e));
+    }
   };
 
   const openSession = async (id: string) => {
-    const detail = await api.getSession(id);
-    setCurrentSession(id);
-    setMessages(detail.messages || []);
-    onNavigate?.();
+    try {
+      const detail = await api.getSession(id);
+      setCurrentSession(id);
+      setMessages(detail.messages || []);
+      onNavigate?.();
+    } catch (e: any) {
+      alert('打开对话失败：' + (e?.message || e));
+    }
   };
 
   const removeSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('删除这个对话？')) return;
-    await api.deleteSession(id);
-    if (currentSessionId === id) resetMessages();
-    await refresh();
+    try {
+      await api.deleteSession(id);
+      if (currentSessionId === id) resetMessages();
+      await refresh();
+    } catch (e: any) {
+      alert('删除失败：' + (e?.message || e));
+    }
   };
 
   return (

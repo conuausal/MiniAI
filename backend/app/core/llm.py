@@ -280,6 +280,11 @@ def get_client(
 
 # ---------- 流式对话 ----------
 
+# 错误文本前缀：调用方（chat.py）据此判断不应写入对话记忆，避免污染后续上下文
+LLM_ERROR_PREFIX = "[MiniAI 错误] "      # 未配置 Key 等
+LLM_FAILED_PREFIX = "[MiniAI 调用失败] "  # LLM 调用异常
+
+
 async def stream_chat(
     model: str,
     messages: List[dict],
@@ -292,7 +297,7 @@ async def stream_chat(
     """流式输出 token（带 function calling 检测）。"""
     client = get_client(model, user_keys, custom_providers)
     if not client:
-        yield f"[MiniAI 错误] 模型 {model} 未配置 API Key。请在右上角 🔑 中填入对应 provider 的 Key。"
+        yield f"{LLM_ERROR_PREFIX}模型 {model} 未配置 API Key。请在右上角 🔑 中填入对应 provider 的 Key。"
         return
 
     kwargs: dict = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, stream=True)
@@ -340,7 +345,7 @@ async def stream_chat(
                 break
     except Exception as e:
         logger.exception("LLM 调用失败: {}", e)
-        yield f"\n\n[MiniAI 调用失败] {type(e).__name__}: {e}"
+        yield f"\n\n{LLM_FAILED_PREFIX}{type(e).__name__}: {e}"
 
 
 async def chat_once(
@@ -355,7 +360,7 @@ async def chat_once(
     """非流式一次返回。"""
     client = get_client(model, user_keys, custom_providers)
     if not client:
-        return {"text": f"[MiniAI 错误] 模型 {model} 未配置 API Key。", "tool_calls": [], "finish_reason": "error"}
+        return {"text": f"{LLM_ERROR_PREFIX}模型 {model} 未配置 API Key。", "tool_calls": [], "finish_reason": "error"}
 
     kwargs: dict = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens)
     if tools:
@@ -372,4 +377,4 @@ async def chat_once(
         }
     except Exception as e:
         logger.exception("LLM 调用失败: {}", e)
-        return {"text": f"[MiniAI 调用失败] {type(e).__name__}: {e}", "tool_calls": [], "finish_reason": "error"}
+        return {"text": f"{LLM_FAILED_PREFIX}{type(e).__name__}: {e}", "tool_calls": [], "finish_reason": "error"}

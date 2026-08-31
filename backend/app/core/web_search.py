@@ -9,6 +9,7 @@ Key 来源：DASHSCOPE_API_KEY 环境变量 / 后端 .env 的 DASHSCOPE_API_KEY�
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import List, Optional
 
@@ -83,7 +84,10 @@ async def _search_via_tavily(query: str, max_results: int) -> List[dict]:
         from tavily import TavilyClient
 
         client = TavilyClient(api_key=settings.tavily_api_key)
-        resp = client.search(query=query, max_results=max_results, search_depth="basic")
+        # 同步网络调用放线程池，避免阻塞事件循环
+        resp = await asyncio.to_thread(
+            client.search, query=query, max_results=max_results, search_depth="basic"
+        )
         results: List[dict] = []
         for item in resp.get("results", []):
             results.append({

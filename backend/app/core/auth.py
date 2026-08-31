@@ -63,7 +63,11 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
     data = decode_token(token)
     if not data:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
-    user = await db.get(User, int(data["sub"]))
+    try:
+        uid = int(data["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="登录状态无效，请重新登录")
+    user = await db.get(User, uid)
     if user is None:
         raise HTTPException(status_code=401, detail="用户不存在")
     return user

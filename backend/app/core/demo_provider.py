@@ -30,10 +30,18 @@ def _detect_tool_call(user_text: str, tools: List[dict]) -> Optional[dict]:
         if tool["function"]["name"] == "calculate":
             # 提取数学表达式
             m = re.search(r"([\d+\-*/().\s]+)", user_text)
-            if m and any(c in m.group(1) for c in "+-*/") and re.search(r"\d", m.group(1)):
+            if m and re.search(r"\d", m.group(1)):
                 expr = m.group(1).strip()
+                # 收紧误触发：纯加减短表达式像"版本 2-3 个"、"2023-2024 年"不算算式
+                is_range = re.fullmatch(r"\d+\s*-\s*\d+", expr)
+                has_strong_op = any(c in expr for c in "*/%")
+                has_weak_op = any(c in expr for c in "+-")
+                plausible = (
+                    (has_strong_op and re.search(r"\d", expr))
+                    or (has_weak_op and len(expr) >= 5 and not is_range)
+                )
                 # 简单安全校验：只允许数字 + 运算符
-                if re.fullmatch(r"[\d\s+\-*/().]+", expr):
+                if plausible and re.fullmatch(r"[\d\s+\-*/().]+", expr):
                     return {
                         "id": f"call_{int(datetime.now().timestamp())}",
                         "type": "function",

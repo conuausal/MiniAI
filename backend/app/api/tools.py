@@ -1,16 +1,18 @@
 """工具清单 API。"""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.core.auth import get_current_user
 from app.core.tools import list_tools
 from app.models.schemas import ToolListResponse
+from app.models.user import User
 
 router = APIRouter()
 
 
 @router.get("", response_model=ToolListResponse)
-async def get_tools() -> ToolListResponse:
+async def get_tools(user: User = Depends(get_current_user)) -> ToolListResponse:
     """返回所有可用工具的元信息（schema）。"""
     schemas = list_tools()
     return ToolListResponse(

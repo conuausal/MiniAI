@@ -25,6 +25,10 @@ export default function KnowledgePage() {
   useEffect(() => { refresh(); }, [collection]);
 
   const onUpload = async (file: File) => {
+    if (file.size > 20 * 1024 * 1024) {
+      alert('文件不能超过 20MB');
+      return;
+    }
     setUploading(true);
     try {
       await api.uploadDoc(file, collection);

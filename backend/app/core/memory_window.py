@@ -30,6 +30,10 @@ def _cap() -> int:
     return max(1, int(settings.memory_window_rounds)) * 2
 
 
+# 窗口 key 的 TTL：每次写入刷新，防止被删除/放弃的会话留下永不过期的 key
+WINDOW_TTL_SECONDS = 7 * 24 * 3600
+
+
 async def push_window(session_id: str, role: str, content: str) -> bool:
     """把一条消息写入窗口，超出容量自动裁剪旧消息。"""
     if not session_id:
@@ -42,9 +46,22 @@ async def push_window(session_id: str, role: str, content: str) -> bool:
         cap = _cap()
         if length > cap:
             await r.ltrim(key, length - cap, -1)
+        await r.expire(key, WINDOW_TTL_SECONDS)
         return True
     except Exception as e:
         logger.warning("Redis 窗口写入失败（回退 MySQL）: {}", e)
+        return False
+
+
+async def delete_window(session_id: str) -> bool:
+    """删除会话对应的窗口 key（随会话删除一起调用）。"""
+    if not session_id:
+        return False
+    try:
+        await _redis().delete(f"miniai:win:{session_id}")
+        return True
+    except Exception as e:
+        logger.warning("Redis 窗口删除失败: {}", e)
         return False
 
 

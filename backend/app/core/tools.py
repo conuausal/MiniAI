@@ -46,6 +46,8 @@ _BIN_OPS: Dict[type, Any] = {
     ast.Mod: operator.mod, ast.Pow: operator.pow,
 }
 _UNARY_OPS: Dict[type, Any] = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+# 幂指数上限：9**9**9 的外层指数 9**9 = 3.87e8 会在求值阶段被拒绝，不会真正执行乘方
+_MAX_POW_EXPONENT = 1000
 
 
 def _safe_eval(expr: str) -> float:
@@ -58,6 +60,12 @@ def _safe_eval(expr: str) -> float:
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return float(node.value)
         if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
+            if isinstance(node.op, ast.Pow):
+                # 幂运算限制指数，防止 9**9**9 之类的大整数幂阻塞事件循环
+                right = _eval(node.right)
+                if not float(right).is_integer() or abs(right) > _MAX_POW_EXPONENT:
+                    raise ValueError(f"幂指数过大或不为整数（|n| ≤ {_MAX_POW_EXPONENT}）")
+                return operator.pow(_eval(node.left), right)
             return _BIN_OPS[type(node.op)](_eval(node.left), _eval(node.right))
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPS:
             return _UNARY_OPS[type(node.op)](_eval(node.operand))
@@ -75,7 +83,8 @@ async def calculate(expression: str) -> str:
         # 只允许数字、运算符、括号、小数点、空格
         if not re.fullmatch(r"[\d\s+\-*/().%]+", expr):
             return "错误：表达式包含非法字符，仅支持数字与四则运算"
-        value = _safe_eval(expr)
+        # 求值放线程 + 超时兜底（纵深防御：正常情况下 _safe_eval 的指数限制已足够快）
+        value = await asyncio.wait_for(asyncio.to_thread(_safe_eval, expr), timeout=2)
         # 整数就不显示小数
         if value.is_integer():
             return f"{expression} = {int(value)}"
@@ -91,17 +100,42 @@ _ALLOWED_READ_ROOTS = [
     Path(settings.vector_store_dir).parent / "uploads",
 ]
 
+# 敏感文件/目录拒绝清单：白名单根目录含 cwd（即 backend/），必须排除密钥与内部文件
+_SENSITIVE_NAME_RE = re.compile(
+    r"^(\.env|.*\.env|id_rsa|id_ed25519|id_ecdsa)"
+    r"|(\.(db|sqlite|sqlite3|pem|key|p12|pfx|pyc))$",
+    re.IGNORECASE,
+)
+_SENSITIVE_DIR_PARTS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".idea", ".vscode", ".ssh"}
+
+
+def _is_sensitive(p: Path) -> bool:
+    """判断路径是否指向密钥/内部文件（.env、数据库、日志、证书等）。"""
+    if any(part in _SENSITIVE_DIR_PARTS for part in p.parts):
+        return True
+    name = p.name
+    if name == ".env" or name.startswith(".env."):
+        return True
+    if _SENSITIVE_NAME_RE.search(name):
+        return True
+    # 运行数据目录下的日志/数据库（backend/data/*.log、miniai.db 等）
+    return p.suffix.lower() in {".log"} and "data" in p.parts
+
 
 def _safe_resolve(path_str: str) -> Path:
-    """解析路径并校验其在白名单内。"""
+    """解析路径并校验其在白名单内，且不指向敏感文件。"""
     p = Path(path_str).expanduser().resolve()
     for root in _ALLOWED_READ_ROOTS:
         try:
             p.relative_to(root.resolve())
-            return p
+            break
         except ValueError:
             continue
-    raise PermissionError(f"路径不被允许: {path_str}")
+    else:
+        raise PermissionError(f"路径不被允许: {path_str}")
+    if _is_sensitive(p):
+        raise PermissionError(f"文件不允许读取: {p.name}")
+    return p
 
 
 async def read_file(path: str, max_chars: int = 8000) -> str:
@@ -210,7 +244,7 @@ _register(
 
 _register(
     name="calculate",
-    description="计算数学表达式。仅支持四则运算 + - * / // % 与括号。常用于'xxx 加 xx 是多少'、'算一下'。",
+    description="计算数学表达式。仅支持四则运算 + - * / // % ** 与括号，幂指数绝对值不超过 1000。常用于'xxx 加 xx 是多少'、'算一下'。",
     parameters={
         "type": "object",
         "properties": {
@@ -255,7 +289,7 @@ _register(
 
 _register(
     name="read_file",
-    description="读取本地文本文件（限项目目录与上传目录）。文件不存在或越权会返回错误。",
+    description="读取本地文本文件（限项目目录与上传目录，不读取 .env/密钥/数据库等敏感文件）。文件不存在或越权会返回错误。",
     parameters={
         "type": "object",
         "properties": {

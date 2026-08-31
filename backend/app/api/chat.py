@@ -1,22 +1,27 @@
 ﻿"""聊天 API：支持流式（SSE）+ RAG 增强 + 联网搜索增强 + 工具调用（Function Calling） + 对话记忆。"""
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import AsyncIterator, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.auth import get_current_user
-from app.core.llm import chat_once, parse_custom_providers, parse_user_keys, stream_chat
+from app.core.llm import (
+    LLM_ERROR_PREFIX, LLM_FAILED_PREFIX,
+    chat_once, parse_custom_providers, parse_user_keys, stream_chat,
+)
 from app.core.memory import MemoryStore
-from app.core.memory_window import get_window, push_window
+from app.core.memory_window import delete_window, get_window, push_window
 from app.core.rag import rag_engine
 from app.core.tools import execute_tool, list_tools
 from app.core.web_search import format_for_prompt, web_search
-from app.db.database import get_session
+from app.db.database import AsyncSessionLocal, get_session
 from app.models.schemas import ChatRequest
 from app.models.user import User
 
@@ -38,6 +43,22 @@ SYSTEM_PROMPT = """你是 MiniAI，一个开源、轻量、可私有化部署的
 """
 
 MAX_TOOL_ROUNDS = 3
+
+
+def _is_error_text(text: str) -> bool:
+    """LLM 调用失败/未配置 Key 的错误文本不应写入对话记忆（污染后续上下文）。"""
+    t = text.strip()  # stream_chat 的失败文本带前导 \n\n
+    return t.startswith(LLM_ERROR_PREFIX.strip()) or t.startswith(LLM_FAILED_PREFIX.strip())
+
+
+async def _persist_assistant_message(session_id: str, text: str) -> None:
+    """独立会话持久化助手回复，失败仅告警不影响响应。"""
+    try:
+        async with AsyncSessionLocal() as session:
+            await MemoryStore(session).append_message(session_id, "assistant", text)
+        await push_window(session_id, "assistant", text)
+    except Exception as e:
+        logger.warning("助手消息持久化失败（session={}）: {}", session_id, e)
 
 
 def get_user_keys(x_user_api_keys: Optional[str] = Header(default=None)) -> dict:
@@ -151,21 +172,40 @@ async def chat_completions(
             custom_providers=custom_providers,
             user_id=user.id,
         )
-        await store.append_message(session_id, "assistant", text)
-        await push_window(session_id, "assistant", text)
+        if not _is_error_text(text):
+            await store.append_message(session_id, "assistant", text)
+            await push_window(session_id, "assistant", text)
         return {"session_id": session_id, "content": text}
 
     async def event_gen() -> AsyncIterator[str]:
         assistant_buf: list[str] = []
+        persisted = False
+
+        def _schedule_persist() -> None:
+            """幂等调度持久化助手回复；客户端中断时保存已生成的部分内容。
+
+            用独立任务 + 独立数据库会话：客户端断开时生成器在取消上下文中收尾，
+            finally 里的 await 会被直接取消（CancelledError 不走 except Exception），
+            所以必须 fire-and-forget，让持久化脱离请求生命周期执行。
+            """
+            nonlocal persisted
+            if persisted:
+                return
+            text = "".join(assistant_buf).strip()
+            if not text or _is_error_text(text):
+                return
+            persisted = True
+            asyncio.create_task(_persist_assistant_message(session_id, text))
+
         try:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'model': req.model}, ensure_ascii=False)}\n\n"
 
             current_messages = list(full_messages)
+            last_round_had_tool_calls = False
             for _round in range(MAX_TOOL_ROUNDS):
                 round_buf: list[str] = []
                 tool_calls_raw: List[dict] = []
 
-                buf = ""
                 async for delta in stream_chat(
                     model=req.model,
                     messages=current_messages,
@@ -186,6 +226,7 @@ async def chat_completions(
                             tool_calls_raw = json.loads(json_part)
                         except Exception:
                             tool_calls_raw = []
+                            yield f"event: error\ndata: {json.dumps({'message': '工具调用解析失败，回复可能不完整。'}, ensure_ascii=False)}\n\n"
                     else:
                         round_buf.append(delta)
                         assistant_buf.append(delta)
@@ -216,13 +257,30 @@ async def chat_completions(
                 round_text = "".join(round_buf)
                 current_messages.append({"role": "assistant", "content": round_text, "tool_calls": tool_calls_raw})
                 current_messages.extend(tool_msgs)
+                last_round_had_tool_calls = True
 
-            final = "".join(assistant_buf)
-            await store.append_message(session_id, "assistant", final)
-            await push_window(session_id, "assistant", final)
+            # 工具轮耗尽后补一轮无工具的收敛回答（与非流式 _run_with_tools 的兜底一致）
+            if last_round_had_tool_calls:
+                async for delta in stream_chat(
+                    model=req.model,
+                    messages=current_messages,
+                    temperature=req.temperature,
+                    max_tokens=req.max_tokens,
+                    tools=None,
+                    user_keys=user_keys,
+                    custom_providers=custom_providers,
+                ):
+                    assistant_buf.append(delta)
+                    yield f"event: delta\ndata: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
+
+            _schedule_persist()
             yield f"event: done\ndata: {json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
         except Exception as e:
+            _schedule_persist()
             yield f"event: error\ndata: {json.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            # 客户端断开（GeneratorExit）时兜底持久化已生成的部分内容；finally 中不得 yield
+            _schedule_persist()
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
@@ -307,4 +365,5 @@ async def clear_session(
     ok = await store.delete_session(session_id, user.id)
     if not ok:
         raise HTTPException(status_code=404, detail="session 不存在")
+    await delete_window(session_id)
     return {"deleted": session_id}

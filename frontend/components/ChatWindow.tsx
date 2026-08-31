@@ -16,6 +16,10 @@ const SUGGESTIONS = [
   { emoji: '🌐', title: '查最新资讯', prompt: '帮我搜一下今天 AI 领域有什么重要新闻', color: 'glass-orange', glow: '' },
 ];
 
+// fetch/reader 在用户主动中止时抛 AbortError，属正常流程而非错误
+const isAbortError = (e: any) =>
+  e?.name === 'AbortError' || /abort/i.test(String(e?.message || e || ''));
+
 export default function ChatWindow() {
   const {
     messages, toolRecords, currentModel, currentSessionId,
@@ -122,6 +126,8 @@ export default function ChatWindow() {
             }
           },
           onError: (msg) => {
+            // 用户主动中止不算错误，不追加提示
+            if (isAbortError({ message: msg })) return;
             const all = useChatStore.getState().messages;
             const next = [...all];
             next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${msg}` };
@@ -132,10 +138,13 @@ export default function ChatWindow() {
         ctl.signal,
       );
     } catch (e: any) {
-      const all = useChatStore.getState().messages;
-      const next = [...all];
-      next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${e?.message || e}` };
-      setMessages(next);
+      // 用户主动中止：保留已生成的部分内容即可，静默结束
+      if (!isAbortError(e)) {
+        const all = useChatStore.getState().messages;
+        const next = [...all];
+        next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${e?.message || e}` };
+        setMessages(next);
+      }
     }
 
     setStreaming(false);
