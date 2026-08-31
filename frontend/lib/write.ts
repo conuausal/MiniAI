@@ -169,6 +169,16 @@ function handleEvent(p: any, update: PipelineUpdater) {
     });
   } else if (ev === 'writer_start') {
     update((s) => ({ ...s, writer: { ...s.writer, status: 'running' } }));
+  } else if (ev === 'writer_delta') {
+    // Writer 流式输出：实时追加，打字机效果
+    update((s) => ({
+      ...s,
+      writer: {
+        status: 'running',
+        article: (s.writer.article || '') + (p.text || ''),
+        wordCount: (s.writer.wordCount || 0) + (p.text ? p.text.length : 0),
+      },
+    }));
   } else if (ev === 'writer_done') {
     update((s) => ({
       ...s,

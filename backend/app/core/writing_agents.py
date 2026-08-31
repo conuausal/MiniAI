@@ -16,7 +16,7 @@ from typing import AsyncIterator, List, Optional
 from loguru import logger
 
 from app.config import settings
-from app.core.llm import LLM_ERROR_PREFIX, LLM_FAILED_PREFIX, chat_once, MODEL_REGISTRY
+from app.core.llm import LLM_ERROR_PREFIX, LLM_FAILED_PREFIX, chat_once, stream_chat, MODEL_REGISTRY
 
 
 def _raise_if_llm_error(text: str) -> str:
@@ -359,8 +359,13 @@ async def writer_agent(
     model: str,
     user_keys: Optional[dict] = None,
     custom_providers: Optional[dict] = None,
+    send: Optional[callable] = None,
 ) -> str:
-    """Writer：综合所有章节素材，输出最终文章。"""
+    """Writer：综合所有章节素材，输出最终文章。
+
+    真实模型走流式生成，通过 send 实时推送 writer_delta 事件（打字机效果），
+    避免 4000 token 的长文生成期间前端无任何反馈。
+    """
     style_desc = STYLE_GUIDES.get(style, STYLE_GUIDES["blog"])
     length_desc, _ = LENGTH_GUIDES.get(length, LENGTH_GUIDES["medium"])
 
@@ -401,19 +406,23 @@ async def writer_agent(
     if model in MODEL_REGISTRY and MODEL_REGISTRY[model].get("provider") == "demo":
         return writer_for_demo(outline, sections, topic, style)
 
-    result = await chat_once(
+    messages = [
+        {"role": "system", "content": WRITER_SYSTEM},
+        {"role": "user", "content": user_prompt},
+    ]
+    chunks: List[str] = []
+    async for delta in stream_chat(
         model=model,
-        messages=[
-            {"role": "system", "content": WRITER_SYSTEM},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.7,
         max_tokens=4000,
         user_keys=user_keys,
         custom_providers=custom_providers,
-    )
-    article = _raise_if_llm_error(result["text"] if isinstance(result, dict) else result)
-    return article
+    ):
+        chunks.append(delta)
+        if send:
+            send({"event": "writer_delta", "text": delta})
+    return _raise_if_llm_error("".join(chunks))
 
 
 # ============== 编排器 ==============
@@ -488,6 +497,7 @@ async def run_writing_pipeline(
         topic=topic, style=style, length=length,
         outline=outline, sections=sections, model=model,
         user_keys=user_keys, custom_providers=custom_providers,
+        send=send,
     )
     t_writer = time.monotonic() - t0 - t_planner - t_researchers
     logger.info("写作计时 [writer] {:.1f}s (总耗时 {:.1f}s)", t_writer, time.monotonic() - t0)

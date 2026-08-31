@@ -51,6 +51,13 @@ export default function WritePage() {
     }
   }, [models.length]);
 
+  // Writer 开始流式输出时自动切到文章页，让用户实时看到文章生成（打字机效果）
+  useEffect(() => {
+    if (state.writer.status === 'running' && state.writer.article && activeTab === 'pipeline') {
+      setActiveTab('article');
+    }
+  }, [state.writer.status, state.writer.article, activeTab]);
+
   const start = async () => {
     if (!topic.trim() || state.overall === 'running') return;
     setState({ ...initialPipelineState(), topic, overall: 'running' });
