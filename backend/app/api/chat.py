@@ -204,6 +204,10 @@ async def chat_completions(
         assistant_buf: list[str] = []
         thinking_buf: list[str] = []
         persisted = False
+        # 流式指标：首 token 延迟 / chunk 数 / thinking 块数，用于定位"无流式体验"问题
+        import time as _time
+        t_start = _time.monotonic()
+        metrics = {"chunks": 0, "thinking_chunks": 0, "t_first": None, "t_first_thinking": None}
 
         def _schedule_persist() -> None:
             """幂等调度持久化助手回复；客户端中断时保存已生成的部分内容。
@@ -242,10 +246,16 @@ async def chat_completions(
                     custom_providers=custom_providers,
                 ):
                     if kind == "thinking":
+                        metrics["thinking_chunks"] += 1
+                        if metrics["t_first_thinking"] is None:
+                            metrics["t_first_thinking"] = _time.monotonic() - t_start
                         thinking_buf.append(text)
                         yield f"event: thinking\ndata: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
                         continue
                     delta = text
+                    metrics["chunks"] += 1
+                    if metrics["t_first"] is None and "<<<TOOL_CALLS>>>" not in delta:
+                        metrics["t_first"] = _time.monotonic() - t_start
                     if "<<<TOOL_CALLS>>>" in delta:
                         before, _, after = delta.partition("<<<TOOL_CALLS>>>")
                         json_part, _, _ = after.partition("<<<END>>>")
@@ -309,9 +319,20 @@ async def chat_completions(
                     yield f"event: delta\ndata: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
 
             _schedule_persist()
+            logger.info(
+                "聊天流指标: model={} chunks={} thinking_chunks={} 首正文={}s 首思考={}s 总={:.1f}s",
+                req.model, metrics["chunks"], metrics["thinking_chunks"],
+                f"{metrics['t_first']:.1f}" if metrics["t_first"] is not None else "无",
+                f"{metrics['t_first_thinking']:.1f}" if metrics["t_first_thinking"] is not None else "无",
+                _time.monotonic() - t_start,
+            )
             yield f"event: done\ndata: {json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
         except Exception as e:
             _schedule_persist()
+            logger.info(
+                "聊天流指标(异常): model={} chunks={} thinking_chunks={} 总={:.1f}s err={}",
+                req.model, metrics["chunks"], metrics["thinking_chunks"], _time.monotonic() - t_start, e,
+            )
             yield f"event: error\ndata: {json.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
         finally:
             # 客户端断开（GeneratorExit）时兜底持久化已生成的部分内容；finally 中不得 yield
