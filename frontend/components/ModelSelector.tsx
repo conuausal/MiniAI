@@ -13,7 +13,6 @@ const TAG_STYLES: Record<string, string> = {
   '中文': 'bg-red-100 text-red-700',
   '长文本': 'bg-cyan-100 text-cyan-700',
   '多模态': 'bg-pink-100 text-pink-700',
-  '免费': 'bg-lime-100 text-lime-700',
   '最新': 'bg-blue-100 text-blue-700',
 };
 

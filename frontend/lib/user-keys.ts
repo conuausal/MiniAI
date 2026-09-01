@@ -19,7 +19,7 @@ export const PROVIDER_META: Record<BuiltinProvider, { label: string; emoji: stri
   deepseek:  { label: 'DeepSeek',     emoji: '🐋', signupUrl: 'https://platform.deepseek.com/', hint: '国产之光 · 中文最强 · 性价比极高' },
   openai:    { label: 'OpenAI',       emoji: '🧠', signupUrl: 'https://platform.openai.com/api-keys', hint: 'GPT-4o / o1 等 · 海外最强' },
   MiniMax:     { label: 'MiniMax',       emoji: '🤖', signupUrl: 'https://platform.MiniMax.io/', hint: 'MiniMax-M3 · 多模态旗舰' },
-  zhipu:     { label: '智谱 GLM',      emoji: '🀄', signupUrl: 'https://open.bigmodel.cn/', hint: '国产 · GLM-4-Flash 有免费额度' },
+  zhipu:     { label: '智谱 GLM',      emoji: '🀄', signupUrl: 'https://open.bigmodel.cn/', hint: '国产 · GLM-5.3 / GLM-4 系列 · 以官网定价为准' },
   moonshot:  { label: 'Moonshot Kimi', emoji: '🌙', signupUrl: 'https://platform.moonshot.cn/', hint: '超长上下文 128K' },
   qwen:      { label: '通义千问 Qwen', emoji: '☁️', signupUrl: 'https://dashscope.console.aliyun.com/', hint: '阿里 DashScope · 兼容 OpenAI' },
   gemini:    { label: 'Google Gemini', emoji: '💎', signupUrl: 'https://aistudio.google.com/apikey', hint: 'Google Gemini · 多模态' },

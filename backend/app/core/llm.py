@@ -62,9 +62,9 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
 
     # === 🀄 智谱 GLM ===
     "glm-5.3":             {"provider": "zhipu",     "label": "GLM-5.3",            "tags": ["推荐", "最新", "推理"]},
-    "glm-5.3-flash":       {"provider": "zhipu",     "label": "GLM-5.3-Flash",      "tags": ["最新", "快速", "免费"]},
+    "glm-5.3-flash":       {"provider": "zhipu",     "label": "GLM-5.3-Flash",      "tags": ["最新", "快速"]},
     "glm-4-plus":          {"provider": "zhipu",     "label": "GLM-4-Plus",         "tags": ["推荐"]},
-    "glm-4-flash":         {"provider": "zhipu",     "label": "GLM-4-Flash",        "tags": ["免费"]},
+    "glm-4-flash":         {"provider": "zhipu",     "label": "GLM-4-Flash",        "tags": ["经济"]},
 
     # === 🌙 Moonshot Kimi ===
     "kimi-k2-turbo-preview": {"provider": "moonshot", "label": "Kimi K2 (Turbo)",   "tags": ["最新", "推荐"]},
