@@ -10,6 +10,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# next.config.js 的 rewrite 目标（API_BASE）在 build 时固化进 standalone 产物，
+# 必须在构建阶段就指向容器服务名 backend（compose 服务名固定，运行时 env 传入无效）
+ENV API_BASE=http://backend:8000
 ARG NEXT_PUBLIC_API_BASE
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 RUN npm run build
