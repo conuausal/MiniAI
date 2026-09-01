@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -59,8 +59,35 @@ def _record_login_failure(username: str) -> None:
             _LOGIN_FAILURES.pop(k, None)
 
 
+# ---- 注册限流（公网防批量注册）：每 IP 每小时 5 次，进程内实现，仅单 worker 有效 ----
+_REGISTRATIONS: dict[str, list[float]] = {}
+_REGISTER_MAX_PER_HOUR = 5
+
+
+def _client_ip(request: Request) -> str:
+    """取真实客户端 IP：反向代理场景优先读 X-Forwarded-For（nginx 需配置转发该头）。"""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _register_blocked(ip: str) -> bool:
+    now = time.monotonic()
+    stamps = [t for t in _REGISTRATIONS.get(ip, []) if now - t < 3600]
+    _REGISTRATIONS[ip] = stamps
+    if len(stamps) >= _REGISTER_MAX_PER_HOUR:
+        return True
+    stamps.append(now)
+    return False
+
+
 @router.post("/register")
-async def register(payload: AuthPayload, response: Response, db: AsyncSession = Depends(get_session)):
+async def register(payload: AuthPayload, request: Request, response: Response, db: AsyncSession = Depends(get_session)):
+    # 注册限流（公网防批量注册）：每 IP 每小时最多 5 次
+    ip = _client_ip(request)
+    if _register_blocked(ip):
+        raise HTTPException(status_code=429, detail="注册过于频繁，请一小时后再试")
     _validate(payload.username, payload.password)
     exists = (await db.execute(select(User).where(User.username == payload.username))).scalar_one_or_none()
     if exists:
