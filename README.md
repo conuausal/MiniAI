@@ -82,6 +82,9 @@ cp backend/.env.example backend/.env
 # 3. 一键启动全栈（backend + frontend + mysql + redis）
 docker compose up -d
 
+# 可选：下载中文语义模型增强 RAG 检索（~92MB，不下载则自动回退内置英文模型）
+docker compose exec backend python scripts/download_embedding.py
+
 # 浏览器访问 http://localhost:3000
 ```
 
@@ -201,13 +204,12 @@ MODEL_REGISTRY["my-model"] = {
 
 ## 🔒 部署安全提示
 
-**已内置的安全机制**（v0.10.1）：
+**已内置的安全机制**：
 
 - 工具沙箱：`read_file` 拒绝读取 `.env` / 密钥 / 数据库等敏感文件；`calculate` 限制幂指数并带超时，防止资源耗尽
 - 接口鉴权：除注册 / 登录外全部接口需登录；写作任务回放按用户归属校验
 - 登录限流：同用户名 5 次失败 / 5 分钟 → 429（进程内实现，多 worker 部署需换 Redis）
 - 上传限制：知识库文件最大 20MB
-- SSE 稳定性：客户端中断时已生成的回复自动落库，记忆与对话保持一致
 
 若要将站点部署到公网，请务必：
 
@@ -217,34 +219,12 @@ MODEL_REGISTRY["my-model"] = {
 4. 全程 HTTPS，并设置 `COOKIE_SECURE=True`。
 5. **Webhook 自定义工具**由各用户自行配置 URL（后端会向其发起 POST），自部署场景请知悉由此带来的 SSRF 暴露面，必要时在网络层限制后端出站目标。
 
-#### RAG 模型在公网部署时怎么给所有用户用？
-
-RAG 的 embedding / 重排模型**运行在服务端**（不是访问者的浏览器），所以站点访客无需下载任何东西，部署者只需保证**服务器上**有模型：
-
-```bash
-# 方式一：服务器能出网（或已配 HF 镜像）——容器内一键下载到数据卷
-docker compose exec backend python scripts/download_embedding.py          # ~92MB
-docker compose exec backend python scripts/download_embedding.py --rerank # 加重排模型 ~2.2GB（可选）
-
-# 方式二：服务器完全离线——本地下载后整目录拷贝到服务器
-scp -r backend/data/models user@server:/var/lib/docker/volumes/miniai_miniai-data/_data/models
-
-# 然后在 backend/.env 中指向本地路径（容器内 data 卷挂在 /app/data，相对路径直接可用）：
-# EMBEDDING_MODEL=./data/models/bge-small-zh-v1.5
-# RERANK_MODEL=./data/models/bge-reranker-v2-m3
-docker compose restart backend
-```
-
-注意：切换 embedding 模型后已入库的向量需要重建（`python scripts/rebuild_vector_store.py`），
-因为向量只有用同一个 embedding 模型计算才有意义。重排模型缺失时自动降级为 RRF 融合排序，功能不中断。
-
 ---
 
 ## 🗺️ 规划中
 
 - [ ] 找回密码
 - [ ] 通用多智能体任务（市场分析 / 数据报告 / 代码评审）
-- [ ] 自定义工具（用户上传 JSON Schema）
 - [ ] 移动端 PWA
 - [ ] 浏览器扩展
 
