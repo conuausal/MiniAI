@@ -1,9 +1,11 @@
-"""下载 BAAI/bge-small-zh-v1.5 到本地模型目录（绕过 HF 网络问题）。
+"""下载 RAG 模型到本地模型目录（绕过 HF 网络问题，SentenceTransformer 本地路径离线加载）。
 
-用法：cd backend && python scripts/download_embedding.py
-下载到 data/models/bge-small-zh-v1.5/（普通目录），配合 .env 的
-EMBEDDING_MODEL=./data/models/bge-small-zh-v1.5 使用，SentenceTransformer
-直接从本地路径加载，完全离线。幂等：已下载的文件自动跳过。
+用法：cd backend && python scripts/download_embedding.py [--rerank]
+  默认下载 embedding 模型 BAAI/bge-small-zh-v1.5（~92MB）
+  --rerank 额外下载重排模型 BAAI/bge-reranker-v2-m3（~2.2GB）
+配合 .env：EMBEDDING_MODEL=./data/models/bge-small-zh-v1.5
+          RERANK_MODEL=./data/models/bge-reranker-v2-m3
+幂等：已下载的文件自动跳过。
 """
 import sys
 import time
@@ -11,31 +13,49 @@ from pathlib import Path
 
 import requests
 
-REPO = "BAAI/bge-small-zh-v1.5"
 MIRROR = "https://hf-mirror.com"
-FILES = [
-    "config.json",
-    "config_sentence_transformers.json",
-    "modules.json",
-    "model.safetensors",
-    "tokenizer.json",
-    "tokenizer_config.json",
-    "vocab.txt",
-    "special_tokens_map.json",
-    "1_Pooling/config.json",
-]
 
-model_dir = Path(__file__).resolve().parent.parent / "data" / "models" / REPO.split("/")[-1]
+TARGETS = {
+    "embedding": {
+        "repo": "BAAI/bge-small-zh-v1.5",
+        "files": [
+            "config.json",
+            "config_sentence_transformers.json",
+            "modules.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.txt",
+            "special_tokens_map.json",
+            "1_Pooling/config.json",
+        ],
+    },
+    "rerank": {
+        "repo": "BAAI/bge-reranker-v2-m3",
+        "files": [
+            "config.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "tokenizer.model",
+            "1_Classifier/config.json",
+        ],
+    },
+}
+
+models_root = Path(__file__).resolve().parent.parent / "data" / "models"
 
 
-def download(fname: str) -> None:
-    dest = model_dir / fname
+def download(repo: str, fname: str) -> None:
+    dest = models_root / repo.split("/")[-1] / fname
     if dest.exists() and dest.stat().st_size > 0:
-        print(f"  [skip] {fname} ({dest.stat().st_size // 1024}KB)")
+        print(f"  [skip] {fname} ({dest.stat().st_size // 1048576}MB)")
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    url = f"{MIRROR}/{REPO}/resolve/main/{fname}"
-    print(f"  [get ] {url}")
+    url = f"{MIRROR}/{repo}/resolve/main/{fname}"
+    print(f"  [get ] {fname}")
     t0 = time.time()
     with requests.get(url, stream=True, timeout=60) as r:
         r.raise_for_status()
@@ -52,16 +72,25 @@ def download(fname: str) -> None:
         tmp.rename(dest)
 
 
-def main() -> int:
-    print(f"target: {model_dir}")
-    for fname in FILES:
+def run_target(name: str) -> int:
+    t = TARGETS[name]
+    print(f"[{name}] repo: {t['repo']} -> {models_root / t['repo'].split('/')[-1]}")
+    for fname in t["files"]:
         try:
-            download(fname)
+            download(t["repo"], fname)
         except Exception as e:
             print(f"  [FAIL] {fname} -> {type(e).__name__}: {e}")
             return 1
-    size_mb = sum(f.stat().st_size for f in model_dir.rglob("*") if f.is_file()) // 1048576
-    print(f"\n[DONE] all files ready ({size_mb}MB). restart backend to enable Chinese embedding.")
+    return 0
+
+
+def main() -> int:
+    targets = ["embedding"] + (["rerank"] if "--rerank" in sys.argv else [])
+    for name in targets:
+        if run_target(name) != 0:
+            return 1
+    size_mb = sum(f.stat().st_size for f in models_root.rglob("*") if f.is_file()) // 1048576
+    print(f"\n[DONE] models ready ({size_mb}MB total). restart backend to apply.")
     return 0
 
 

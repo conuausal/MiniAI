@@ -217,6 +217,27 @@ MODEL_REGISTRY["my-model"] = {
 4. 全程 HTTPS，并设置 `COOKIE_SECURE=True`。
 5. **Webhook 自定义工具**由各用户自行配置 URL（后端会向其发起 POST），自部署场景请知悉由此带来的 SSRF 暴露面，必要时在网络层限制后端出站目标。
 
+#### RAG 模型在公网部署时怎么给所有用户用？
+
+RAG 的 embedding / 重排模型**运行在服务端**（不是访问者的浏览器），所以站点访客无需下载任何东西，部署者只需保证**服务器上**有模型：
+
+```bash
+# 方式一：服务器能出网（或已配 HF 镜像）——容器内一键下载到数据卷
+docker compose exec backend python scripts/download_embedding.py          # ~92MB
+docker compose exec backend python scripts/download_embedding.py --rerank # 加重排模型 ~2.2GB（可选）
+
+# 方式二：服务器完全离线——本地下载后整目录拷贝到服务器
+scp -r backend/data/models user@server:/var/lib/docker/volumes/miniai_miniai-data/_data/models
+
+# 然后在 backend/.env 中指向本地路径（容器内 data 卷挂在 /app/data，相对路径直接可用）：
+# EMBEDDING_MODEL=./data/models/bge-small-zh-v1.5
+# RERANK_MODEL=./data/models/bge-reranker-v2-m3
+docker compose restart backend
+```
+
+注意：切换 embedding 模型后已入库的向量需要重建（`python scripts/rebuild_vector_store.py`），
+因为向量只有用同一个 embedding 模型计算才有意义。重排模型缺失时自动降级为 RRF 融合排序，功能不中断。
+
 ---
 
 ## 🗺️ 规划中

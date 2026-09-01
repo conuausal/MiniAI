@@ -61,13 +61,18 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
     "MiniMax-M3":           {"provider": "MiniMax",     "label": "MiniMax-M3",         "tags": ["推荐", "多模态"]},
 
     # === 🀄 智谱 GLM ===
+    "glm-5.3":             {"provider": "zhipu",     "label": "GLM-5.3",            "tags": ["推荐", "最新", "推理"]},
+    "glm-5.3-flash":       {"provider": "zhipu",     "label": "GLM-5.3-Flash",      "tags": ["最新", "快速", "免费"]},
     "glm-4-plus":          {"provider": "zhipu",     "label": "GLM-4-Plus",         "tags": ["推荐"]},
     "glm-4-flash":         {"provider": "zhipu",     "label": "GLM-4-Flash",        "tags": ["免费"]},
 
     # === 🌙 Moonshot Kimi ===
-    "moonshot-v1-128k":    {"provider": "moonshot",  "label": "Kimi 128K",          "tags": ["长文本", "推荐"]},
+    "kimi-k2-turbo-preview": {"provider": "moonshot", "label": "Kimi K2 (Turbo)",   "tags": ["最新", "推荐"]},
+    "kimi-latest":         {"provider": "moonshot",  "label": "Kimi Latest",        "tags": ["推荐"]},
+    "moonshot-v1-128k":    {"provider": "moonshot",  "label": "Kimi 128K",          "tags": ["长文本"]},
 
     # === ☁️ 通义千问 Qwen ===
+    "qwen3-max":           {"provider": "qwen",      "label": "Qwen3-Max",          "tags": ["最新", "中文", "推荐"]},
     "qwen-max":            {"provider": "qwen",      "label": "Qwen-Max",           "tags": ["中文", "推荐"]},
     "qwen-plus":           {"provider": "qwen",      "label": "Qwen-Plus",          "tags": []},
 

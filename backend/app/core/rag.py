@@ -193,7 +193,9 @@ class RagEngine:
         bm25 = BM25Okapi([self._tokenize(d) for d in all_docs])
         scores = bm25.get_scores(self._tokenize(question))
         ordered = sorted(range(len(all_docs)), key=lambda i: scores[i], reverse=True)
-        sparse_docs = [all_docs[i] for i in ordered if scores[i] > 0]
+        if ordered and scores[ordered[0]] > 0:
+            floor = scores[ordered[0]] * 0.3  # BM25 相对分数线：单字蹭分的垃圾文本分远低于关键词命中
+            sparse_docs = [all_docs[i] for i in ordered if scores[i] >= floor]
         return sparse_docs, meta_by_doc
 
     async def query(
@@ -211,14 +213,19 @@ class RagEngine:
         await self._ensure_embed_fn()
         col = self._collection(collection)
 
-        # ---- 1) 稠密检索（ChromaDB 向量） ----
+        # ---- 1) 稠密检索（ChromaDB 向量，带相似度下限过滤） ----
         dense_k = max(top_k * 4, 10)
         dense_docs: List[str] = []
         try:
             res = await asyncio.to_thread(
                 col.query, query_texts=[question], n_results=dense_k, where={"user_id": user_id}
             )
-            dense_docs = [d for d in res.get("documents", [[]])[0] if d]
+            docs_all = res.get("documents", [[]])[0]
+            dists = res.get("distances", [[]])[0] or []
+            for d, dist in zip(docs_all, dists):
+                # cosine distance -> similarity；低于阈值视为不相关（防止任何查询都有命中）
+                if d and (1.0 - float(dist)) >= settings.rag_min_similarity:
+                    dense_docs.append(d)
         except Exception as e:
             logger.warning("向量检索失败: {}", e)
 
@@ -242,16 +249,26 @@ class RagEngine:
         candidates = sorted(rrf.items(), key=lambda x: x[1], reverse=True)
         if not candidates:
             return []
+        # 候选集截断：真正的相关性判定由重排概率门限（rag_rerank_min_score）负责
         cand_top = [doc for doc, _ in candidates[: max(top_k * 3, 5)]]
 
-        # ---- 4) 交叉编码器重排 ----
+        # ---- 4) 交叉编码器重排（相关概率门限：>= rag_rerank_min_score 才算命中） ----
         try:
             reranker = await self._get_reranker()
             if not reranker:
                 raise RuntimeError("重排模型不可用")
             scores = await asyncio.to_thread(reranker.predict, [[question, doc] for doc in cand_top])
-            ordered = [cand_top[i] for i in sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)]
-            top_docs = ordered[:top_k]
+            ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+            top_docs = [
+                cand_top[i] for i in ranked
+                if float(scores[i]) >= settings.rag_rerank_min_score
+            ][:top_k]
+            if not top_docs:
+                logger.info(
+                    "重排判定全部候选不相关（最高相关度 {:.3f} < {:.2f}），判定为未命中",
+                    float(scores[ranked[0]]), settings.rag_rerank_min_score,
+                )
+                return []
         except Exception as e:
             logger.warning("重排失败，降级为 RRF 融合结果: {}", e)
             top_docs = cand_top[:top_k]

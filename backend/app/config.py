@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     # 多次串行调用的场景在 provider 挂住时会长时间无响应
     llm_timeout_seconds: float = 180.0
 
+    # ===== RAG 检索阈值（防止"问什么都有命中"）=====
+    # 稠密检索余弦相似度下限：低于此值的向量结果直接丢弃（bge-small-zh 无关文本一般在 0.2~0.35）
+    rag_min_similarity: float = 0.30
+    # 交叉编码器相关度门限：重排输出为相关概率(0~1)，实测命中 0.95+ / 无关 0.001，0.5 为标准分界
+    rag_rerank_min_score: float = 0.5
+
     # 阿里云百炼（DashScope）Web Search（联网搜索），与 qwen 共用同一个 key
     dashscope_api_key: str = ""
 
