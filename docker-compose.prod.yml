@@ -1,0 +1,84 @@
+# 生产部署编排：与 docker-compose.yml 的区别
+# 1. MySQL/Redis/后端不暴露任何公网端口，仅前端绑 127.0.0.1:3000 供反向代理
+# 2. 数据库密码从 /opt/MiniAI/.env 读取（MYSQL_PASSWORD 变量，两处引用保持一致）
+# 3. 前端 rewrite 目标固定为容器服务名 backend
+#
+# 用法：
+#   cd /opt/MiniAI
+#   cp backend/.env.example backend/.env   # 按上线教程配置 APP_ENV/JWT_SECRET/COOKIE_SECURE
+#   echo "MYSQL_PASSWORD=你的强密码" >> /opt/MiniAI/.env
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: miniai-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=mysql+aiomysql://miniai:${MYSQL_PASSWORD:?请在 /opt/MiniAI/.env 设置 MYSQL_PASSWORD}@mysql:3306/miniai
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - miniai-data:/app/data
+
+  mysql:
+    image: mysql:8.0
+    container_name: miniai-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?请在 /opt/MiniAI/.env 设置 MYSQL_PASSWORD}
+      MYSQL_DATABASE: miniai
+      MYSQL_USER: miniai
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - miniai-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uminiai", "-pminiai"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: miniai-redis
+    restart: unless-stopped
+    volumes:
+      - miniai-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: miniai-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - API_BASE=http://backend:8000
+      - NODE_ENV=production
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  miniai-data:
+  miniai-mysql-data:
+  miniai-redis-data:
