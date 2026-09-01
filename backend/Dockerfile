@@ -21,10 +21,11 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY app ./app
+COPY scripts ./scripts
 COPY .env.example ./.env.example
 
-# 数据/向量库/上传 三个目录
-RUN mkdir -p /app/data/vector_store /app/data/uploads
+# 数据/向量库/上传/模型 四个目录
+RUN mkdir -p /app/data/vector_store /app/data/uploads /app/data/models
 
 EXPOSE 8000
 
