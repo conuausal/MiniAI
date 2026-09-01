@@ -297,7 +297,8 @@ class RagEngine:
         col = self._collection(collection)
 
         def _delete() -> bool:
-            items = col.get(where={"doc_id": doc_id, "user_id": user_id})
+            # chromadb 0.5.x 多条件 where 必须用 $and 包裹
+            items = col.get(where={"$and": [{"doc_id": doc_id}, {"user_id": user_id}]})
             if not items.get("ids"):
                 return False
             col.delete(ids=items["ids"])

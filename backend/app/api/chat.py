@@ -88,17 +88,27 @@ async def _ensure_session(db: AsyncSession, req: ChatRequest, user_id: int) -> t
     return store, sess.id
 
 
+KB_STRICT_PROMPT = (
+    "【知识库严格模式】你必须仅依据上文提供的知识库检索片段回答用户问题。"
+    "若片段未覆盖用户的问题，直接回答'知识库中没有相关内容'，"
+    "禁止编造、禁止使用你自身的知识补充。引用片段时请标注 [n] 序号。"
+)
+
+
 async def _build_initial_messages(
     store: MemoryStore,
     session_id: str,
     req: ChatRequest,
     user_id: int = 0,
     user_system_prompt: str = "",
-) -> list[dict]:
+    kb_strict: bool = False,
+) -> tuple[list[dict], list[dict]]:
     """构造发给 LLM 的完整 messages：N 轮记忆窗口 + RAG + 联网。
 
     记忆窗口优先从 Redis 读取（滑动窗口，最近 N 轮）；
     Redis 未命中或不可用时回退到 MySQL 最近 N 轮。
+
+    返回 (history, rag_hits)：rag_hits 供前端展示检索命中信息（source/score/preview）。
     """
     # 1) 记忆窗口（不含 system）
     window = await get_window(session_id)
@@ -113,14 +123,22 @@ async def _build_initial_messages(
             "role": "system",
             "content": f"以下是本用户自定义的补充系统设定，请严格遵守：\n{user_system_prompt.strip()}",
         })
+    # 知识库严格模式：防编造指令
+    if kb_strict:
+        history.append({"role": "system", "content": KB_STRICT_PROMPT})
     history += list(window)
 
     # 2) RAG / 联网增强最后一条 user 消息
     last_user = next((m for m in reversed(req.messages) if m.role == "user"), None)
     extra_context_blocks: list[str] = []
+    rag_hits: list[dict] = []
 
     if last_user and req.enable_rag:
         chunks = await rag_engine.query(last_user.content, top_k=4, user_id=user_id)
+        rag_hits = [
+            {"source": c["source"], "score": c.get("score", 0.0), "preview": c["content"][:120]}
+            for c in chunks
+        ]
         if chunks:
             ctx = "\n\n".join(
                 f"[{i+1}] {c['content']}\n来源: {c['source']}" for i, c in enumerate(chunks)
@@ -144,7 +162,7 @@ async def _build_initial_messages(
         else:
             history.append({"role": "user", "content": augmented})
 
-    return history
+    return history, rag_hits
 
 
 @router.post("/completions", response_model=None)
@@ -165,7 +183,11 @@ async def chat_completions(
         await push_window(session_id, "user", last_user_text)
 
     user_system_prompt, custom_tools = await load_user_preferences(db, user.id)
-    full_messages = await _build_initial_messages(store, session_id, req, user.id, user_system_prompt)
+    if req.kb_strict:
+        req.enable_rag = True  # 严格模式隐含开启检索（_build_initial_messages 内部读取该值）
+    full_messages, rag_hits = await _build_initial_messages(
+        store, session_id, req, user.id, user_system_prompt, req.kb_strict,
+    )
     # 工具 schema = 内置 + 用户自定义（Webhook）工具
     custom_schemas = [
         {
@@ -198,7 +220,11 @@ async def chat_completions(
         if not _is_error_text(text):
             await store.append_message(session_id, "assistant", text)
             await push_window(session_id, "assistant", text)
-        return {"session_id": session_id, "content": text}
+        return {
+            "session_id": session_id,
+            "content": text,
+            "rag_hits": rag_hits if (req.enable_rag or req.kb_strict) else None,
+        }
 
     async def event_gen() -> AsyncIterator[str]:
         assistant_buf: list[str] = []
@@ -229,6 +255,10 @@ async def chat_completions(
 
         try:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'model': req.model}, ensure_ascii=False)}\n\n"
+
+            # 检索命中信息（RAG/严格模式开启时必发，无论命中与否，供前端展示卡片/未命中提示）
+            if req.enable_rag or req.kb_strict:
+                yield f"event: rag_hits\ndata: {json.dumps({'enabled': True, 'hits': rag_hits}, ensure_ascii=False)}\n\n"
 
             current_messages = list(full_messages)
             last_round_had_tool_calls = False

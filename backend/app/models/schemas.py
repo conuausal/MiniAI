@@ -40,6 +40,7 @@ class ChatRequest(BaseModel):
     enable_rag: bool = False
     enable_search: bool = False
     enable_tools: bool = False
+    kb_strict: bool = False  # 知识库严格模式：仅依据检索片段回答，未命中明确说不知道
     stream: bool = True
 
 

@@ -19,7 +19,7 @@
 |:--|:--|
 | 🧠 **多模型自由切换** | DeepSeek / OpenAI / 智谱 GLM / MiniMax / Kimi / Qwen / Gemini，或任意 OpenAI 兼容服务（Ollama / vLLM / One-API） |
 | 🎭 **内置演示模型** | `miniai-demo` 无需任何 API Key，开箱即可体验聊天、工具调用、多智能体写作全流程 |
-| 📚 **RAG 知识库** | 上传 PDF / DOCX / TXT / Markdown，ChromaDB 向量检索 + 混合检索重排，对话中自动注入上下文 |
+| 📚 **RAG 知识库** | 上传 PDF / DOCX / TXT / Markdown，中文语义向量（bge-small-zh）+ BM25 混合检索 + 交叉编码器重排；检索过程可视化（来源/相关度卡片）、未命中明示、📕 严格模式（仅依据文档回答，防编造） |
 | 🌐 **联网搜索** | 阿里云百炼 DashScope Web Search（未配置时回退 Tavily） |
 | 🔧 **Function Calling** | 5 个内置工具（时间 / 计算 / 搜索 / 知识库 / 读文件）+ 调用过程可视化折叠卡片，工具沙箱化（敏感文件保护 + 计算资源限制） |
 | 💭 **思考过程可视化** | 推理模型（DeepSeek-R1 / GLM / M3 等）的思考链实时流式展示，折叠卡片 + 打字机效果 |

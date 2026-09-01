@@ -28,6 +28,7 @@ export default function ModelSelector() {
     enableRag, setEnableRag,
     enableSearch, setEnableSearch,
     enableTools, setEnableTools,
+    enableKbStrict, setEnableKbStrict,
     streaming,
   } = useChatStore();
 
@@ -50,6 +51,7 @@ export default function ModelSelector() {
       <ToggleChip active={enableRag} onChange={setEnableRag} disabled={streaming} emoji="📚" label="RAG" activeColor="cyan" />
       <ToggleChip active={enableSearch} onChange={setEnableSearch} disabled={streaming} emoji="🌐" label="联网" activeColor="blue" />
       <ToggleChip active={enableTools} onChange={setEnableTools} disabled={streaming} emoji="🔧" label="工具" activeColor="amber" />
+      <ToggleChip active={enableKbStrict} onChange={setEnableKbStrict} disabled={streaming} emoji="📕" label="严格" activeColor="rose" />
     </div>
   );
 }
@@ -197,11 +199,12 @@ function groupByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
 
 function ToggleChip({ active, onChange, disabled, emoji, label, activeColor }: {
   active: boolean; onChange: (v: boolean) => void; disabled: boolean;
-  emoji: string; label: string; activeColor?: 'amber' | 'cyan' | 'blue';
+  emoji: string; label: string; activeColor?: 'amber' | 'cyan' | 'blue' | 'rose';
 }) {
   const activeCls =
     activeColor === 'amber' ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
     : activeColor === 'cyan' ? 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-900/40 dark:text-cyan-200 dark:border-cyan-700'
+    : activeColor === 'rose' ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-700'
     : activeColor === 'blue' ? 'bg-primary/15 text-primary border-primary/40'
     : 'bg-primary/15 text-primary border-primary/40';
 

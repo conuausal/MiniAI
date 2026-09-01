@@ -99,8 +99,20 @@ export const api = {
 
 // ============== 流式聊天（SSE） ==============
 
+export interface RagHit {
+  source: string;
+  score: number;
+  preview: string;
+}
+
+export interface RagHitsData {
+  enabled: boolean;
+  hits: RagHit[];
+}
+
 export interface ChatStreamHandlers {
   onMeta?: (data: { session_id: string; model: string }) => void;
+  onRagHits?: (data: RagHitsData) => void; // 知识库检索命中信息（含未命中）
   onDelta?: (delta: string) => void;
   onThinking?: (delta: string) => void; // 推理模型思考过程（逐块）
   onToolCall?: (data: { round: number; tool_calls: any[] }) => void;
@@ -119,6 +131,7 @@ export async function streamChat(
     enable_rag?: boolean;
     enable_search?: boolean;
     enable_tools?: boolean;
+    kb_strict?: boolean;
   },
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
@@ -155,6 +168,7 @@ export async function streamChat(
       try {
         const data = JSON.parse(dataLines.join('\n'));
         if (event === 'meta') handlers.onMeta?.(data);
+        else if (event === 'rag_hits') handlers.onRagHits?.(data);
         else if (event === 'delta') handlers.onDelta?.(data.content ?? '');
         else if (event === 'thinking') handlers.onThinking?.(data.content ?? '');
         else if (event === 'tool_call') handlers.onToolCall?.(data);

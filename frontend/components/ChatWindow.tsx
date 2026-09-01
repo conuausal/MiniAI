@@ -5,6 +5,7 @@ import { useChatStore } from '@/lib/store';
 import { streamChat, ChatMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
 import ToolCallCard from './ToolCallCard';
+import RagCard from './RagCard';
 import VoiceInputButton from './VoiceInputButton';
 import { useUserKeys } from '@/lib/user-keys';
 import { getContextSuggestions } from '@/lib/suggestions';
@@ -23,12 +24,12 @@ const isAbortError = (e: any) =>
 
 export default function ChatWindow() {
   const {
-    messages, toolRecords, thinking, currentModel, currentSessionId,
-    enableRag, enableSearch, enableTools,
+    messages, toolRecords, thinking, ragHits, currentModel, currentSessionId,
+    enableRag, enableSearch, enableTools, enableKbStrict,
     enableVoiceInput, enableVoiceOutput,
     streaming, setStreaming, setAbortCtl, abortCtl,
     appendMessage, setMessages, setCurrentSession,
-    appendToolRecord, appendThinking, patchMessage,
+    appendToolRecord, appendThinking, patchMessage, setRagHits,
   } = useChatStore();
   const { hasAny } = useUserKeys();
   const [input, setInput] = useState('');
@@ -133,11 +134,13 @@ export default function ChatWindow() {
           enable_rag: enableRag,
           enable_search: enableSearch,
           enable_tools: enableTools,
+          kb_strict: enableKbStrict,
           temperature: 0.7,
           max_tokens: 2048,
         },
         {
           onMeta: ({ session_id }) => setCurrentSession(session_id),
+          onRagHits: (data) => setRagHits(assistantIdx, data),
           onDelta: (delta) => {
             // 打字机平滑：先入缓冲，rAF 逐帧上屏
             queueDelta(delta);
@@ -225,6 +228,11 @@ export default function ChatWindow() {
                     thinkingLive={liveThinking}
                     showCursor={isLast && streaming && m.role === 'assistant'}
                   />
+                  {m.role === 'assistant' && ragHits[i] && (
+                    <div className="flex justify-start mt-2">
+                      <RagCard data={ragHits[i]} />
+                    </div>
+                  )}
                   {m.role === 'assistant' && toolRecords[i] && toolRecords[i].length > 0 && (
                     <div className="flex justify-start mt-2">
                       <ToolCallCard records={toolRecords[i]} />
