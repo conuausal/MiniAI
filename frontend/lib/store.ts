@@ -41,6 +41,7 @@ interface ChatState {
   resetMessages: () => void;
   appendToolRecord: (msgIdx: number, rec: ToolCallRecord) => void;
   appendThinking: (msgIdx: number, delta: string) => void;
+  patchMessage: (idx: number, patch: Partial<ChatMessage>) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -82,4 +83,12 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       thinking: { ...s.thinking, [msgIdx]: (s.thinking[msgIdx] || '') + delta },
     })),
+  // 只更新单条消息内容，不清空 thinking / toolRecords（流式期间专用）
+  patchMessage: (idx, patch) =>
+    set((s) => {
+      if (!s.messages[idx]) return s;
+      const next = [...s.messages];
+      next[idx] = { ...next[idx], ...patch };
+      return { messages: next };
+    }),
 }));

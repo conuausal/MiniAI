@@ -28,7 +28,7 @@ export default function ChatWindow() {
     enableVoiceInput, enableVoiceOutput,
     streaming, setStreaming, setAbortCtl, abortCtl,
     appendMessage, setMessages, setCurrentSession,
-    appendToolRecord, appendThinking,
+    appendToolRecord, appendThinking, patchMessage,
   } = useChatStore();
   const { hasAny } = useUserKeys();
   const [input, setInput] = useState('');
@@ -80,10 +80,8 @@ export default function ChatWindow() {
     const chunk = buf.slice(0, take);
     deltaBufRef.current = buf.slice(take);
     const all = useChatStore.getState().messages;
-    const next = [...all];
-    const lastIdx = next.length - 1;
-    next[lastIdx] = { ...next[lastIdx], content: (next[lastIdx].content || '') + chunk };
-    setMessages(next);
+    const lastIdx = all.length - 1;
+    useChatStore.getState().patchMessage(lastIdx, { content: (all[lastIdx].content || '') + chunk });
   };
 
   const flushTick = () => {
@@ -171,9 +169,8 @@ export default function ChatWindow() {
             // 用户主动中止不算错误，不追加提示
             if (isAbortError({ message: msg })) return;
             const all = useChatStore.getState().messages;
-            const next = [...all];
-            next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${msg}` };
-            setMessages(next);
+            const lastIdx = all.length - 1;
+            patchMessage(lastIdx, { content: (all[lastIdx].content || '') + `\n\n> ⚠️ ${msg}` });
           },
           onDone: () => { finishTypewriter(); setStreaming(false); setAbortCtl(null); },
         },
@@ -184,9 +181,8 @@ export default function ChatWindow() {
       finishTypewriter();
       if (!isAbortError(e)) {
         const all = useChatStore.getState().messages;
-        const next = [...all];
-        next[next.length - 1] = { ...next[next.length - 1], content: (next[next.length - 1].content || '') + `\n\n> ⚠️ ${e?.message || e}` };
-        setMessages(next);
+        const lastIdx = all.length - 1;
+        patchMessage(lastIdx, { content: (all[lastIdx].content || '') + `\n\n> ⚠️ ${e?.message || e}` });
       }
     }
 
