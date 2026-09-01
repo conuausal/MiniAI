@@ -1,6 +1,8 @@
 # MiniAI 前端 - Next.js 14 多阶段构建
+# 国内服务器构建请用 npmmirror 镜像（海外机器不受影响，镜像源会自动回源）
 FROM node:20-alpine AS deps
 WORKDIR /app
+RUN npm config set registry https://registry.npmmirror.com
 COPY package.json ./
 RUN npm install --no-audit --no-fund
 
