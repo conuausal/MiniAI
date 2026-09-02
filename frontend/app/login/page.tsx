@@ -30,7 +30,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="h-screen grid place-items-center bg-bg px-4">
+    <div className="h-dvh grid place-items-center bg-bg px-4">
       <div className="glass-card rounded-2xl w-full max-w-sm p-8 animate-slide-up">
         <div className="text-center mb-6">
           <div className="text-4xl mb-2">🧠</div>

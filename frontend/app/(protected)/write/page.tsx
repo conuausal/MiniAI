@@ -206,7 +206,7 @@ export default function WritePage() {
   );
 
   return (
-    <div className="h-screen flex flex-col bg-bg">
+    <div className="h-dvh flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧：表单（桌面常驻 / 移动端抽屉复用） */}

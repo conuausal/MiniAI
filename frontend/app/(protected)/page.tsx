@@ -23,7 +23,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-bg">
+    <div className="h-dvh flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />

@@ -66,7 +66,7 @@ export default function KnowledgePage() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-bg">
+    <div className="h-dvh flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">

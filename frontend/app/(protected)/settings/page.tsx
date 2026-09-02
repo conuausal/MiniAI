@@ -82,7 +82,7 @@ export default function SettingsPage() {
   const disabled = models.filter((m) => !m.enabled);
 
   return (
-    <div className="h-screen flex flex-col bg-bg">
+    <div className="h-dvh flex flex-col bg-bg">
       <Topbar />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">

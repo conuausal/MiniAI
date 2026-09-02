@@ -14,7 +14,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   if (loading || !user) {
     return (
-      <div className="h-screen grid place-items-center bg-bg">
+      <div className="h-dvh grid place-items-center bg-bg">
         <div className="text-text-mute text-sm animate-pulse-soft">加载中…</div>
       </div>
     );

@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="min-h-dvh antialiased">
         {children}
       </body>
     </html>
