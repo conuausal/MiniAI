@@ -9,6 +9,7 @@ import RagCard from './RagCard';
 import VoiceInputButton from './VoiceInputButton';
 import { useUserKeys } from '@/lib/user-keys';
 import { getContextSuggestions } from '@/lib/suggestions';
+import { ToggleChip } from './ModelSelector';
 import { speak, stopSpeaking, getVoiceCapability } from '@/lib/voice';
 
 const SUGGESTIONS = [
@@ -25,7 +26,8 @@ const isAbortError = (e: any) =>
 export default function ChatWindow() {
   const {
     messages, toolRecords, thinking, ragHits, currentModel, currentSessionId,
-    enableRag, enableSearch, enableTools, enableKbStrict,
+    enableRag, setEnableRag, enableSearch, setEnableSearch,
+    enableTools, setEnableTools, enableKbStrict, setEnableKbStrict,
     enableVoiceInput, enableVoiceOutput,
     streaming, setStreaming, setAbortCtl, abortCtl,
     appendMessage, setMessages, setCurrentSession,
@@ -257,6 +259,13 @@ export default function ChatWindow() {
 
       <div className="border-t border-border-soft bg-surface/40 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-6 py-4">
+          {/* 手机端功能开关（桌面端在顶栏 ModelSelector 里） */}
+          <div className="flex md:hidden items-center gap-1.5 mb-3 overflow-x-auto">
+            <ToggleChip active={enableRag} onChange={setEnableRag} disabled={streaming} emoji="📚" label="RAG" activeColor="cyan" />
+            <ToggleChip active={enableSearch} onChange={setEnableSearch} disabled={streaming} emoji="🌐" label="联网" activeColor="blue" />
+            <ToggleChip active={enableTools} onChange={setEnableTools} disabled={streaming} emoji="🔧" label="工具" activeColor="amber" />
+            <ToggleChip active={enableKbStrict} onChange={setEnableKbStrict} disabled={streaming} emoji="📕" label="严格" activeColor="rose" />
+          </div>
           {/* 主动建议 chips */}
           {suggestions.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3 animate-fade-in">

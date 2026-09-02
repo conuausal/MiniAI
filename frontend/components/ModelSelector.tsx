@@ -38,7 +38,7 @@ export default function ModelSelector() {
   const groupedDisabled = useMemo(() => groupByProvider(disabled), [disabled]);
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 min-w-0">
       <ModelPicker
         currentModel={currentModel}
         onSelect={setCurrentModel}
@@ -47,10 +47,13 @@ export default function ModelSelector() {
         disabled={streaming || enabled.length === 0}
       />
 
-      <ToggleChip active={enableRag} onChange={setEnableRag} disabled={streaming} emoji="📚" label="RAG" activeColor="cyan" />
-      <ToggleChip active={enableSearch} onChange={setEnableSearch} disabled={streaming} emoji="🌐" label="联网" activeColor="blue" />
-      <ToggleChip active={enableTools} onChange={setEnableTools} disabled={streaming} emoji="🔧" label="工具" activeColor="amber" />
-      <ToggleChip active={enableKbStrict} onChange={setEnableKbStrict} disabled={streaming} emoji="📕" label="严格" activeColor="rose" />
+      {/* 手机端功能开关移到输入框上方（见 ChatWindow），顶栏只保留桌面端 */}
+      <div className="hidden md:flex items-center gap-1.5">
+        <ToggleChip active={enableRag} onChange={setEnableRag} disabled={streaming} emoji="📚" label="RAG" activeColor="cyan" />
+        <ToggleChip active={enableSearch} onChange={setEnableSearch} disabled={streaming} emoji="🌐" label="联网" activeColor="blue" />
+        <ToggleChip active={enableTools} onChange={setEnableTools} disabled={streaming} emoji="🔧" label="工具" activeColor="amber" />
+        <ToggleChip active={enableKbStrict} onChange={setEnableKbStrict} disabled={streaming} emoji="📕" label="严格" activeColor="rose" />
+      </div>
     </div>
   );
 }
@@ -196,7 +199,7 @@ function groupByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
   return map;
 }
 
-function ToggleChip({ active, onChange, disabled, emoji, label, activeColor }: {
+export function ToggleChip({ active, onChange, disabled, emoji, label, activeColor }: {
   active: boolean; onChange: (v: boolean) => void; disabled: boolean;
   emoji: string; label: string; activeColor?: 'amber' | 'cyan' | 'blue' | 'rose';
 }) {
