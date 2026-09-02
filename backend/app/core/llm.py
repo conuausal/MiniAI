@@ -54,6 +54,9 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
     "deepseek-v4-flash":  {"provider": "deepseek",  "label": "DeepSeek-V4 Flash",  "tags": ["最新", "快速", "经济"]},
 
     # === 🧠 OpenAI ===
+    "gpt-5.6-luna":       {"provider": "openai",    "label": "GPT-5.6 Luna",      "tags": ["最新", "推荐"]},
+    "gpt-5.6-terra":      {"provider": "openai",    "label": "GPT-5.6 Terra",     "tags": ["最新"]},
+    "gpt-5.6-sol":        {"provider": "openai",    "label": "GPT-5.6 Sol",       "tags": ["最新"]},
     "gpt-4o":             {"provider": "openai",    "label": "GPT-4o",            "tags": ["多模态"]},
     "gpt-4o-mini":        {"provider": "openai",    "label": "GPT-4o mini",       "tags": ["快速", "经济"]},
 
@@ -67,12 +70,15 @@ MODEL_REGISTRY: Dict[str, Dict[str, object]] = {
     "glm-4-flash":         {"provider": "zhipu",     "label": "GLM-4-Flash",        "tags": ["经济"]},
 
     # === 🌙 Moonshot Kimi ===
-    "kimi-k2-turbo-preview": {"provider": "moonshot", "label": "Kimi K2 (Turbo)",   "tags": ["最新", "推荐"]},
+    "kimi-k3":             {"provider": "moonshot",  "label": "Kimi K3",            "tags": ["最新", "推荐"]},
+    "kimi-k2-turbo-preview": {"provider": "moonshot", "label": "Kimi K2 (Turbo)",   "tags": ["推荐"]},
     "kimi-latest":         {"provider": "moonshot",  "label": "Kimi Latest",        "tags": ["推荐"]},
     "moonshot-v1-128k":    {"provider": "moonshot",  "label": "Kimi 128K",          "tags": ["长文本"]},
 
     # === ☁️ 通义千问 Qwen ===
-    "qwen3-max":           {"provider": "qwen",      "label": "Qwen3-Max",          "tags": ["最新", "中文", "推荐"]},
+    "qwen3.8-max":         {"provider": "qwen",      "label": "Qwen3.8-Max",        "tags": ["最新", "中文", "推荐"]},
+    "qwen3.8-flash":       {"provider": "qwen",      "label": "Qwen3.8-Flash",      "tags": ["最新", "快速"]},
+    "qwen3.7-plus":        {"provider": "qwen",      "label": "Qwen3.7-Plus",       "tags": ["最新", "中文"]},
     "qwen-max":            {"provider": "qwen",      "label": "Qwen-Max",           "tags": ["中文", "推荐"]},
     "qwen-plus":           {"provider": "qwen",      "label": "Qwen-Plus",          "tags": []},
 
@@ -292,6 +298,66 @@ LLM_ERROR_PREFIX = "[MiniAI 错误] "      # 未配置 Key 等
 LLM_FAILED_PREFIX = "[MiniAI 调用失败] "  # LLM 调用异常
 
 
+class _ThinkSplitter:
+    """把正文里行内的 <think>...</think> 思考块（MiniMax M3 等）分流为 thinking 事件。
+
+    处理标签被拆到多个 chunk 之间的情况：用 holdback 缓存可能是半个标签的尾部。
+    """
+    OPEN, CLOSE = "<think>", "</think>"
+
+    def __init__(self) -> None:
+        self.in_think = False
+        self.hold = ""  # 可能是半个标签的尾部，等下一个 chunk 拼接后判断
+
+    @staticmethod
+    def _partial_suffix(buf: str, tag: str) -> int:
+        """buf 尾部与 tag 前缀重合的最长长度（0 = 无部分标签）。"""
+        for k in range(min(len(buf), len(tag) - 1), 0, -1):
+            if tag.startswith(buf[-k:]):
+                return k
+        return 0
+
+    def feed(self, text: str) -> list[tuple[str, str]]:
+        out: list[tuple[str, str]] = []
+        buf = self.hold + text
+        self.hold = ""
+        while True:
+            if self.in_think:
+                i = buf.find(self.CLOSE)
+                if i >= 0:
+                    if i:
+                        out.append(("thinking", buf[:i]))
+                    buf = buf[i + len(self.CLOSE):]
+                    self.in_think = False
+                    continue
+                hold = self._partial_suffix(buf, self.CLOSE)
+                emit, self.hold = buf[:len(buf) - hold], buf[len(buf) - hold:]
+                if emit:
+                    out.append(("thinking", emit))
+                break
+            i = buf.find(self.OPEN)
+            if i >= 0:
+                if i:
+                    out.append(("delta", buf[:i]))
+                buf = buf[i + len(self.OPEN):]
+                self.in_think = True
+                continue
+            hold = self._partial_suffix(buf, self.OPEN)
+            emit, self.hold = buf[:len(buf) - hold], buf[len(buf) - hold:]
+            if emit:
+                out.append(("delta", emit))
+            break
+        return out
+
+    def flush(self) -> Optional[tuple[str, str]]:
+        """流结束时把 holdback 按当前状态吐出。"""
+        if not self.hold:
+            return None
+        kind = "thinking" if self.in_think else "delta"
+        text, self.hold = self.hold, ""
+        return (kind, text)
+
+
 async def stream_chat(
     model: str,
     messages: List[dict],
@@ -320,6 +386,7 @@ async def stream_chat(
         stream = await client.chat.completions.create(**kwargs)
 
         tool_calls_acc: Dict[int, Dict] = {}
+        think_splitter = _ThinkSplitter()  # 兼容 MiniMax M3 等把思考以 <think> 标签混在正文里的模型
         async for chunk in stream:
             if not chunk.choices:
                 continue
@@ -335,7 +402,8 @@ async def stream_chat(
                 yield ("thinking", reasoning)
 
             if delta.content:
-                yield ("delta", delta.content)
+                for kind2, text2 in think_splitter.feed(delta.content):
+                    yield (kind2, text2)
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -361,8 +429,14 @@ async def stream_chat(
 
             if choice.finish_reason == "tool_calls" and tool_calls_acc:
                 payload = [tool_calls_acc[k] for k in sorted(tool_calls_acc.keys())]
+                tail = think_splitter.flush()
+                if tail:
+                    yield tail
                 yield ("delta", f"\n\n<<<TOOL_CALLS>>>{json.dumps(payload, ensure_ascii=False)}<<<END>>>")
                 break
+        tail = think_splitter.flush()
+        if tail:
+            yield tail
     except Exception as e:
         logger.exception("LLM 调用失败: {}", e)
         yield ("delta", f"\n\n{LLM_FAILED_PREFIX}{type(e).__name__}: {e}")
