@@ -153,7 +153,11 @@ async def _build_initial_messages(
         try:
             results = await web_search(last_user.content)
             if results:
-                extra_context_blocks.append(f"以下来自实时联网搜索：\n{format_for_prompt(results)}")
+                ctx = format_for_prompt(results)
+                extra_context_blocks.append(
+                    "以下来自实时联网搜索（注意：搜索引擎索引有滞后，未检索到相关信息"
+                    "≠ 该事物不存在，此时请回答'联网检索未找到相关信息'而非断言其不存在）：\n" + ctx
+                )
         except Exception as e:
             logger.warning("联网增强失败（跳过增强）: {}", e)
 
