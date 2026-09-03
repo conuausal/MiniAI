@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.12.0] - 2026-09-02
+
+### 🧠 兼容性 / 稳定性
+
+- **`<think>` 行内思考分流**：MiniMax M3 等把思考以标签混在正文的模型，思考实时剥离进卡片（支持标签跨 chunk 拆分）
+- **DeepSeek DSML 工具标记泄漏过滤**：未启用工具时模型漏出的内部调用标记自动剥离，并提示开启 🔧 工具
+- **长回答截断保护**：聊天 max_tokens 2048 → 8192；因长度截断时明确提示"发送继续可接着写"
+- **工具执行硬超时**：45 秒中止 + 明确错误；DashScope 搜索超时收紧至 20 秒
+- **增强降级**：RAG/联网检索失败不再导致请求 500，自动降级为无增强回答
+
+### 🌐 联网搜索升级
+
+- **新增 DeepSeek 原生搜索后端**（`web_search_20250305` 服务端工具）：搜索/抓取/解密/综合全在 DeepSeek 服务端完成，返回答案+来源链接，无需第三方搜索 API
+- `SEARCH_BACKEND` 可配置后端优先级（auto/dashscope/deepseek/tavily），失败自动降级
+- 联网注入防"断言不存在"：索引滞后 ≠ 事物不存在，未命中时回答"未找到相关信息"
+
+### 📱 移动端
+
+- 竖屏横向裁切修复：`h-screen` → `h-dvh`（全站 9 处）+ 显式 viewport + `overflow-x: clip`
+- 顶栏溢出修复：功能开关（RAG/联网/工具/严格）在手机端移至输入框上方
+
+### 🤖 模型
+
+- 新增 GPT-5.6 Luna/Terra/Sol、Kimi K3、Qwen3.8-Max/Flash、Qwen3.7-Plus（移除误导性"免费"标签）
+
+### 🚀 部署
+
+- 新增 `docker-compose.prod.yml`（零内部端口暴露）+ Dockerfile 国内镜像源（npmmirror/清华 PyPI）
+- RAG 模型脚本进镜像；requirements 移除未使用的 langchain/unstructured（消除依赖冲突）
+
+---
+
 ## [0.11.1] - 2026-09-01
 
 ### 📚 RAG 体验优化四件套

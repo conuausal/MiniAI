@@ -29,7 +29,7 @@ IS_PRODUCTION = settings.app_env.strip().lower() == "production"
 app = FastAPI(
     title="MiniAI API",
     description="开源的个人 AI 助手：多模型 + RAG + 联网搜索 + 工具调用 + 多智能体写作 + 对话记忆",
-    version="0.11.1",
+    version="0.12.0",
     lifespan=lifespan,
     docs_url=None if IS_PRODUCTION else "/docs",
     redoc_url=None if IS_PRODUCTION else "/redoc",
@@ -58,4 +58,4 @@ app.include_router(preferences.router, prefix="/api/preferences", tags=["prefere
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
-    return {"status": "ok", "app": settings.app_name, "version": "0.11.1"}
+    return {"status": "ok", "app": settings.app_name, "version": "0.12.0"}
