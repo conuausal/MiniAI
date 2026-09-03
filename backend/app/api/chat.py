@@ -134,21 +134,28 @@ async def _build_initial_messages(
     rag_hits: list[dict] = []
 
     if last_user and req.enable_rag:
-        chunks = await rag_engine.query(last_user.content, top_k=4, user_id=user_id)
-        rag_hits = [
-            {"source": c["source"], "score": c.get("score", 0.0), "preview": c["content"][:120]}
-            for c in chunks
-        ]
-        if chunks:
-            ctx = "\n\n".join(
-                f"[{i+1}] {c['content']}\n来源: {c['source']}" for i, c in enumerate(chunks)
-            )
-            extra_context_blocks.append(f"以下是从本地知识库检索到的相关片段：\n{ctx}")
+        # 防御性包裹：检索/增强失败不应让整个请求 500，最多失去增强
+        try:
+            chunks = await rag_engine.query(last_user.content, top_k=4, user_id=user_id)
+            rag_hits = [
+                {"source": c["source"], "score": c.get("score", 0.0), "preview": c["content"][:120]}
+                for c in chunks
+            ]
+            if chunks:
+                ctx = "\n\n".join(
+                    f"[{i+1}] {c['content']}\n来源: {c['source']}" for i, c in enumerate(chunks)
+                )
+                extra_context_blocks.append(f"以下是从本地知识库检索到的相关片段：\n{ctx}")
+        except Exception as e:
+            logger.warning("RAG 增强失败（跳过增强）: {}", e)
 
     if last_user and req.enable_search:
-        results = await web_search(last_user.content)
-        if results:
-            extra_context_blocks.append(f"以下来自实时联网搜索：\n{format_for_prompt(results)}")
+        try:
+            results = await web_search(last_user.content)
+            if results:
+                extra_context_blocks.append(f"以下来自实时联网搜索：\n{format_for_prompt(results)}")
+        except Exception as e:
+            logger.warning("联网增强失败（跳过增强）: {}", e)
 
     if extra_context_blocks:
         augmented = last_user.content + "\n\n---\n" + "\n\n".join(extra_context_blocks)
