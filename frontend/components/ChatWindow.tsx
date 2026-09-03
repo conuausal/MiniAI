@@ -138,7 +138,8 @@ export default function ChatWindow() {
           enable_tools: enableTools,
           kb_strict: enableKbStrict,
           temperature: 0.7,
-          max_tokens: 2048,
+          // 长回答 + 推理模型的思考都计入 token，2048 很容易被截断
+          max_tokens: 8192,
         },
         {
           onMeta: ({ session_id }) => setCurrentSession(session_id),

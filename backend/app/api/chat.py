@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.auth import get_current_user
 from app.core.llm import (
-    LLM_ERROR_PREFIX, LLM_FAILED_PREFIX,
+    LLM_ERROR_PREFIX, LLM_FAILED_PREFIX, TRUNCATION_HINT,
     chat_once, parse_custom_providers, parse_user_keys, stream_chat,
 )
 from app.core.memory import MemoryStore
@@ -399,7 +399,10 @@ async def _run_with_tools(
             user_keys=user_keys, custom_providers=custom_providers,
         )
         if not result["tool_calls"]:
-            return result["text"], all_records
+            text = result["text"]
+            if result.get("finish_reason") == "length":
+                text += TRUNCATION_HINT
+            return text, all_records
         tool_msgs = []
         for tc in result["tool_calls"]:
             name = (tc.get("function") or {}).get("name", "")

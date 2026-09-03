@@ -297,6 +297,9 @@ def get_client(
 LLM_ERROR_PREFIX = "[MiniAI 错误] "      # 未配置 Key 等
 LLM_FAILED_PREFIX = "[MiniAI 调用失败] "  # LLM 调用异常
 
+# 输出因 max_tokens 上限被截断时的提示
+TRUNCATION_HINT = "\n\n> ⚠️ 已达到单次输出长度上限，回答可能不完整。发送“继续”可让我接着写。"
+
 
 class _ThinkSplitter:
     """把正文里行内的 <think>...</think> 思考块（MiniMax M3 等）分流为 thinking 事件。
@@ -387,11 +390,14 @@ async def stream_chat(
 
         tool_calls_acc: Dict[int, Dict] = {}
         think_splitter = _ThinkSplitter()  # 兼容 MiniMax M3 等把思考以 <think> 标签混在正文里的模型
+        finish_reason: Optional[str] = None
         async for chunk in stream:
             if not chunk.choices:
                 continue
             choice = chunk.choices[0]
             delta = choice.delta
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
 
             # 推理模型思考内容（DeepSeek-R1 / GLM / MiniMax M3 等走 reasoning_content 字段）
             if isinstance(delta, dict):
@@ -437,6 +443,8 @@ async def stream_chat(
         tail = think_splitter.flush()
         if tail:
             yield tail
+        if finish_reason == "length":
+            yield ("delta", TRUNCATION_HINT)
     except Exception as e:
         logger.exception("LLM 调用失败: {}", e)
         yield ("delta", f"\n\n{LLM_FAILED_PREFIX}{type(e).__name__}: {e}")
