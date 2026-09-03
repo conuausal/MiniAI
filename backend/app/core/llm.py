@@ -300,6 +300,78 @@ LLM_FAILED_PREFIX = "[MiniAI 调用失败] "  # LLM 调用异常
 # 输出因 max_tokens 上限被截断时的提示
 TRUNCATION_HINT = "\n\n> ⚠️ 已达到单次输出长度上限，回答可能不完整。发送“继续”可让我接着写。"
 
+# DeepSeek V4 系在未传 tools 参数时，可能把内部工具调用以 DSML 标记文本漏进正文
+DSML_TOOL_HINT = "\n\n> ⚠️ 模型尝试调用搜索/工具，但当前未启用工具功能。可在输入框上方开启 🔧 工具 后重试。"
+_DSML_START = "<｜｜DSML｜｜"
+_DSML_END = "</｜｜DSML｜｜tool_calls>"
+
+
+def _partial_tag_suffix(buf: str, tag: str) -> int:
+    """buf 尾部与 tag 前缀重合的最长长度（0 = 无部分标签）。"""
+    for k in range(min(len(buf), len(tag) - 1), 0, -1):
+        if tag.startswith(buf[-k:]):
+            return k
+    return 0
+
+
+def _strip_dsml_blocks(text: str) -> tuple[str, bool]:
+    """非流式路径：移除正文中的 DSML 工具调用泄漏块。返回 (清洗后文本, 是否发生过泄漏)。"""
+    if _DSML_START not in text:
+        return text, False
+    import re as _re
+    cleaned = _re.sub(
+        _re.escape(_DSML_START) + r"[\s\S]*?(?:" + _re.escape(_DSML_END) + r"|\Z)", "", text
+    )
+    return cleaned, True
+
+
+class _DSMLFilter:
+    """流式路径：过滤 DeepSeek DSML 工具调用泄漏块，首次触发时产出一条 notice。"""
+
+    def __init__(self) -> None:
+        self.in_block = False
+        self.hold = ""
+        self.leaked = False
+
+    def feed(self, text: str) -> list[tuple[str, str]]:
+        # kind: "delta" 正常内容 | "notice" 提示（去重后仅一条）
+        out: list[tuple[str, str]] = []
+        buf = self.hold + text
+        self.hold = ""
+        while True:
+            if self.in_block:
+                i = buf.find(_DSML_END)
+                if i >= 0:
+                    buf = buf[i + len(_DSML_END):]
+                    self.in_block = False
+                    continue
+                hold = _partial_tag_suffix(buf, _DSML_END)
+                self.hold = buf[len(buf) - hold:]
+                break
+            i = buf.find(_DSML_START)
+            if i >= 0:
+                if i:
+                    out.append(("delta", buf[:i]))
+                buf = buf[i + len(_DSML_START):]
+                self.in_block = True
+                self.leaked = True
+                if not any(k == "notice" for k, _ in out):
+                    out.append(("notice", DSML_TOOL_HINT))
+                continue
+            hold = _partial_tag_suffix(buf, _DSML_START)
+            emit, self.hold = buf[:len(buf) - hold], buf[len(buf) - hold:]
+            if emit:
+                out.append(("delta", emit))
+            break
+        return out
+
+    def flush(self) -> Optional[tuple[str, str]]:
+        if self.hold and not self.in_block:
+            text, self.hold = self.hold, ""
+            return ("delta", text)
+        self.hold = ""  # 泄漏块内的残尾直接丢弃
+        return None
+
 
 class _ThinkSplitter:
     """把正文里行内的 <think>...</think> 思考块（MiniMax M3 等）分流为 thinking 事件。
@@ -390,6 +462,7 @@ async def stream_chat(
 
         tool_calls_acc: Dict[int, Dict] = {}
         think_splitter = _ThinkSplitter()  # 兼容 MiniMax M3 等把思考以 <think> 标签混在正文里的模型
+        dsml_filter = _DSMLFilter()        # 过滤 DeepSeek V4 系的工具调用标记泄漏
         finish_reason: Optional[str] = None
         async for chunk in stream:
             if not chunk.choices:
@@ -408,8 +481,12 @@ async def stream_chat(
                 yield ("thinking", reasoning)
 
             if delta.content:
-                for kind2, text2 in think_splitter.feed(delta.content):
-                    yield (kind2, text2)
+                for kind2, text2 in dsml_filter.feed(delta.content):
+                    if kind2 == "notice":
+                        yield ("delta", text2)
+                    else:
+                        for kind3, text3 in think_splitter.feed(text2):
+                            yield (kind3, text3)
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -443,6 +520,9 @@ async def stream_chat(
         tail = think_splitter.flush()
         if tail:
             yield tail
+        tail = dsml_filter.flush()
+        if tail:
+            yield tail
         if finish_reason == "length":
             yield ("delta", TRUNCATION_HINT)
     except Exception as e:
@@ -472,8 +552,12 @@ async def chat_once(
         resp = await client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
         msg = choice.message
+        text = msg.content or ""
+        cleaned, leaked = _strip_dsml_blocks(text)
+        if leaked:
+            cleaned += DSML_TOOL_HINT
         return {
-            "text": msg.content or "",
+            "text": cleaned,
             "tool_calls": [tc if isinstance(tc, dict) else tc.model_dump() for tc in (msg.tool_calls or [])],
             "finish_reason": choice.finish_reason,
         }
