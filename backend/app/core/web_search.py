@@ -21,6 +21,22 @@ from app.config import settings
 SEARCH_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 SEARCH_MODEL = "qwen-plus"
 
+# DeepSeek 原生联网搜索（Anthropic 兼容端点 + 服务端 web_search 工具）：
+# 搜索/网页抓取/解密全部在 DeepSeek 服务端完成，返回综合答案+来源链接，无需第三方搜索 API
+DEEPSEEK_ANTHROPIC_URL = "https://api.deepseek.com/anthropic/v1/messages"
+DEEPSEEK_SEARCH_MODEL = "deepseek-v4-flash"
+_DEEPSEEK_SEARCH_SYSTEM = (
+    "You are a web search assistant. Follow these rules strictly:\n"
+    "1. Use web_search to find relevant, up-to-date information for the user's query.\n"
+    "2. After receiving search results, write a comprehensive, well-structured answer "
+    "in plain text based on what you found. Include specific details, dates, and facts.\n"
+    "3. Do NOT output tool-call XML (no <invoke> tags).\n"
+    "4. Do NOT call web_search again after you have results.\n"
+    "5. Answer in the same language the user used in their query.\n"
+    "6. If search results are poor or irrelevant, explain why and suggest better keywords.\n"
+    "Your response must be the final answer, not another search request."
+)
+
 
 def _dashscope_key() -> str:
     """取 DashScope key：优先显式配置的 dashscope，其次 qwen（二者本就是同一个 key）。"""
@@ -102,13 +118,100 @@ async def _search_via_tavily(query: str, max_results: int) -> List[dict]:
         return []
 
 
-async def web_search(query: str, max_results: int = 5) -> List[dict]:
-    """返回搜索结果。优先 DashScope，未配置 key 时回退 Tavily。"""
+async def _search_via_deepseek(query: str) -> List[dict]:
+    """DeepSeek 原生联网搜索（服务端 web_search_20250305 工具，Anthropic 兼容端点）。"""
+    key = (settings.deepseek_api_key or "").strip()
+    if not key:
+        return []
+    try:
+        # 抓取网页内容需要时间，30s 已是宽上限
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                DEEPSEEK_ANTHROPIC_URL,
+                headers={"x-api-key": key, "content-type": "application/json"},
+                json={
+                    "model": DEEPSEEK_SEARCH_MODEL,
+                    "max_tokens": 4096,
+                    "messages": [
+                        {"role": "system", "content": _DEEPSEEK_SEARCH_SYSTEM},
+                        {"role": "user", "content": query},
+                    ],
+                    "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+                    "tool_choice": {"type": "auto"},
+                },
+            )
+        if resp.status_code != 200:
+            logger.warning("DeepSeek 原生搜索 HTTP {}: {}", resp.status_code, resp.text[:200])
+            return []
+        data = resp.json()
+        text_parts: List[str] = []
+        urls: List[tuple] = []
+        for block in data.get("content") or []:
+            btype = block.get("type")
+            if btype == "text" and (block.get("text") or "").strip():
+                text_parts.append(block["text"].strip())
+            elif btype == "web_search_tool_result":
+                for item in block.get("content") or []:
+                    if item.get("type") == "web_search_result":
+                        urls.append((item.get("title") or "Untitled", item.get("url") or "", item.get("page_age")))
+        answer = "\n\n".join(text_parts).strip()
+        if not answer and not urls:
+            return []
+        content = answer or "（无综合回答，仅来源列表）"
+        if urls:
+            src = "\n".join(
+                f"{i}. {t} {u}" + (f"（{age}）" if age else "")
+                for i, (t, u, age) in enumerate(urls, 1)
+            )
+            content += f"\n\n来源链接：\n{src}"
+        return [{
+            "title": f"DeepSeek 联网搜索：{query}",
+            "url": urls[0][1] if urls else "",
+            "content": content[:8000],
+        }]
+    except Exception as e:
+        logger.exception("DeepSeek 原生联网搜索失败: {}", e)
+        return []
+
+
+def _ordered_backends() -> List[str]:
+    """按 SEARCH_BACKEND 配置或已配置的 Key 决定搜索后端优先级。"""
+    pref = (settings.search_backend or "auto").strip().lower()
+    if pref in ("dashscope", "deepseek", "tavily"):
+        return [pref]
+    order: List[str] = []
     if _dashscope_key():
-        return await _search_via_dashscope(query)
-    if settings.tavily_api_key:
-        return await _search_via_tavily(query, max_results=min(max_results, 10))
-    logger.warning("未配置 DASHSCOPE_API_KEY / TAVILY_API_KEY，联网搜索不可用")
+        order.append("dashscope")
+    if (settings.deepseek_api_key or "").strip():
+        order.append("deepseek")
+    if (settings.tavily_api_key or "").strip():
+        order.append("tavily")
+    return order
+
+
+async def web_search(query: str, max_results: int = 5) -> List[dict]:
+    """返回搜索结果。按 SEARCH_BACKEND（auto/dashscope/deepseek/tavily）依次尝试。"""
+    backends = _ordered_backends()
+    if not backends:
+        logger.warning("未配置任何搜索后端的 Key（DASHSCOPE / DEEPSEEK / TAVILY），联网搜索不可用")
+        return []
+    for name in backends:
+        try:
+            if name == "dashscope":
+                results = await _search_via_dashscope(query)
+            elif name == "deepseek":
+                results = await _search_via_deepseek(query)
+            elif name == "tavily":
+                results = await _search_via_tavily(query, max_results=min(max_results, 10))
+            else:
+                continue
+        except Exception as e:
+            logger.warning("搜索后端 {} 异常: {}", name, e)
+            results = []
+        if results:
+            return results
+        logger.warning("搜索后端 {} 无结果，尝试下一个", name)
+    logger.warning("所有搜索后端均无结果: {}", backends)
     return []
 
 

@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     # Tavily
     tavily_api_key: str = ""
 
+    # ===== 联网搜索后端 =====
+    # auto=按已配置的 Key 依次尝试（dashscope -> deepseek -> tavily）
+    # 也可强制指定：dashscope / deepseek / tavily
+    search_backend: str = "auto"
+
     # ===== LLM 调用 =====
     # 单次 LLM 请求超时（秒）。不设的话 OpenAI SDK 默认 600 秒，多智能体写作等
     # 多次串行调用的场景在 provider 挂住时会长时间无响应
