@@ -34,7 +34,8 @@ async def _search_via_dashscope(query: str) -> List[dict]:
         return []
     payload = []
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        # 搜索应在数秒内返回；20s 已是极宽上限，避免工具调用期间前端长时间无反馈
+        async with httpx.AsyncClient(timeout=20) as client:
             async with client.stream(
                 "POST",
                 SEARCH_ENDPOINT,

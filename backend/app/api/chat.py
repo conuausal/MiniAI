@@ -323,7 +323,13 @@ async def chat_completions(
                         args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
                     except Exception:
                         args = {}
-                    result = await execute_tool(name, args, user_id=user.id, custom_tools=custom_tools)
+                    try:
+                        result = await asyncio.wait_for(
+                            execute_tool(name, args, user_id=user.id, custom_tools=custom_tools),
+                            timeout=45,
+                        )
+                    except asyncio.TimeoutError:
+                        result = f"错误：工具 {name} 执行超时（45 秒），已中止。可稍后重试。"
                     yield f"event: tool_result\ndata: {json.dumps({'name': name, 'args': args, 'result': result[:4000]}, ensure_ascii=False)}\n\n"
                     tool_msgs.append({
                         "role": "tool",
@@ -418,7 +424,13 @@ async def _run_with_tools(
                 args = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
             except Exception:
                 args = {}
-            tool_result = await execute_tool(name, args, user_id=user_id, custom_tools=custom_tools)
+            try:
+                tool_result = await asyncio.wait_for(
+                    execute_tool(name, args, user_id=user_id, custom_tools=custom_tools),
+                    timeout=45,
+                )
+            except asyncio.TimeoutError:
+                tool_result = f"错误：工具 {name} 执行超时（45 秒），已中止。可稍后重试。"
             all_records.append({"name": name, "args": args, "result": tool_result})
             tool_msgs.append({
                 "role": "tool",
